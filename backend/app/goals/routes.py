@@ -5,6 +5,8 @@ user. Amounts come in as dollars and are stored as cents.
 """
 from datetime import date
 
+import logging
+
 from flask import Blueprint, jsonify, request
 from flask_jwt_extended import get_jwt_identity, jwt_required
 
@@ -14,6 +16,7 @@ from ..models import SavingsGoal
 from ..utils import ApiError, dollars_to_cents, require_str
 
 goals_bp = Blueprint("goals", __name__)
+log = logging.getLogger("savesmart.goals")
 
 
 def _current_user_id() -> int:
@@ -80,6 +83,13 @@ def create_goal():
         raise ApiError("'target_amount' must be greater than zero.")
     db.session.add(goal)
     db.session.commit()
+    log.info(
+        "Goal created: '%s' target=$%.2f id=%s user=%s",
+        goal.name,
+        goal.target_cents / 100,
+        goal.id,
+        goal.user_id,
+    )
     return jsonify({"goal": _serialize(goal)}), 201
 
 
@@ -112,4 +122,5 @@ def delete_goal(goal_id: int):
     goal = _get_owned_goal(goal_id)
     db.session.delete(goal)
     db.session.commit()
+    log.info("Goal deleted: id=%s user=%s", goal_id, _current_user_id())
     return jsonify({"deleted": goal_id})

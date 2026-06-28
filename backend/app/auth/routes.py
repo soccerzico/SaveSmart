@@ -4,6 +4,8 @@ JWT access tokens are returned to the client, which stores them and sends them
 as `Authorization: Bearer <token>`. We use the user id (as a string) for the
 token identity.
 """
+import logging
+
 from email_validator import EmailNotValidError, validate_email
 from flask import Blueprint, jsonify, request
 from flask_jwt_extended import (
@@ -17,6 +19,7 @@ from ..models import User
 from ..utils import ApiError, require_str
 
 auth_bp = Blueprint("auth", __name__)
+log = logging.getLogger("savesmart.auth")
 
 MIN_PASSWORD_LEN = 8
 
@@ -47,6 +50,7 @@ def register():
     db.session.add(user)
     db.session.commit()
 
+    log.info("New user registered: %s (id=%s)", email, user.id)
     token = create_access_token(identity=str(user.id))
     return jsonify({"access_token": token, "user": user.to_dict()}), 201
 
@@ -61,8 +65,10 @@ def login():
     # Same error whether the email is unknown or the password is wrong, so we
     # don't leak which emails are registered.
     if not user or not user.check_password(password):
+        log.warning("Failed login attempt for %s", email)
         raise ApiError("Invalid email or password.", status=401)
 
+    log.info("User logged in: %s (id=%s)", email, user.id)
     token = create_access_token(identity=str(user.id))
     return jsonify({"access_token": token, "user": user.to_dict()})
 

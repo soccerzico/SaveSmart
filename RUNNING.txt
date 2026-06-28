@@ -1,0 +1,81 @@
+==============================================================================
+ SaveSmart — How to run the app
+==============================================================================
+
+ONE-TIME SETUP
+------------------------------------------------------------------------------
+You need Python 3.11+ and Node 18+ installed.
+
+  1. Backend dependencies (creates a virtualenv):
+
+       cd backend
+       python -m venv venv
+       venv\Scripts\activate            (Windows)
+       # source venv/bin/activate       (macOS/Linux)
+       pip install -r requirements.txt
+       copy .env.example .env           (Windows)   /  cp on macOS/Linux
+       cd ..
+
+  2. Frontend dependencies:
+
+       cd frontend
+       npm install
+       cd ..
+
+
+RUNNING IT (unified launcher)
+------------------------------------------------------------------------------
+From the repository root:
+
+  python dev.py                Start the backend API only.
+                               -> http://127.0.0.1:5000
+
+  python dev.py --frontend     Start the backend AND the React dev server.
+                               -> API:      http://127.0.0.1:5000
+                               -> Frontend: http://localhost:5173
+
+  (--full is an alias for --frontend.)
+
+The launcher streams output from both processes, each line prefixed with
+[backend] or [frontend]. Press Ctrl+C once to stop everything cleanly.
+
+Open http://localhost:5173 in your browser and create an account.
+
+
+LOGS
+------------------------------------------------------------------------------
+The backend logs every API request plus key events (signups, logins, and
+account/goal/recurring create & delete). Logs go to two places:
+
+  * The console  — visible live in the terminal running dev.py.
+  * A rotating file at:  backend/logs/savesmart.log
+    (rotates at ~1 MB, keeps 3 old files; this folder is git-ignored)
+
+Example console line for a request:
+  14:02:11 INFO    savesmart | POST /api/goals -> 201 (8.3 ms)
+
+Example event lines:
+  14:02:05 INFO    savesmart.auth | New user registered: you@example.com (id=1)
+  14:02:11 INFO    savesmart.goals | Goal created: 'Vacation' target=$8400.00 ...
+
+To follow the log file live in a separate terminal:
+  PowerShell:  Get-Content backend\logs\savesmart.log -Wait -Tail 20
+  macOS/Linux: tail -f backend/logs/savesmart.log
+
+
+RUNNING THE HALVES SEPARATELY (optional)
+------------------------------------------------------------------------------
+If you prefer two terminals instead of the launcher:
+
+  Terminal 1:  cd backend  && venv\Scripts\activate && python run.py
+  Terminal 2:  cd frontend && npm run dev
+
+
+TROUBLESHOOTING
+------------------------------------------------------------------------------
+* "backend/venv not found" from dev.py — run the one-time backend setup above.
+* Port already in use — an old server is still running. Stop it, or on Windows:
+    Get-Process node,python | Stop-Process -Force
+* Frontend can't reach the API — make sure the backend is running; Vite proxies
+  /api to http://127.0.0.1:5000 (see frontend/vite.config.js).
+==============================================================================

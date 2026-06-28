@@ -41,8 +41,17 @@ SaveSmart/
 
 ## Running it locally
 
-You need **Python 3.11+** and **Node 18+**. Run the two halves in separate
-terminals.
+You need **Python 3.11+** and **Node 18+**. After the one-time setup below, the
+quickest way to boot everything is the unified launcher from the repo root:
+
+```bash
+python dev.py              # backend API only
+python dev.py --frontend   # backend + React dev server
+```
+
+It streams labeled `[backend]` / `[frontend]` logs; Ctrl+C stops both. See
+[`RUNNING.txt`](RUNNING.txt) for full details and log locations. The manual,
+two-terminal setup is below.
 
 ### 1. Backend (http://127.0.0.1:5000)
 

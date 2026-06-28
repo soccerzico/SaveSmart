@@ -2,6 +2,8 @@
 
 Like accounts and goals, every query is scoped to the authenticated user.
 """
+import logging
+
 from flask import Blueprint, jsonify, request
 from flask_jwt_extended import get_jwt_identity, jwt_required
 
@@ -11,6 +13,7 @@ from ..models import DIRECTIONS, FREQUENCIES, RecurringTransaction
 from ..utils import ApiError, dollars_to_cents, require_str
 
 recurring_bp = Blueprint("recurring", __name__)
+log = logging.getLogger("savesmart.recurring")
 
 
 def _current_user_id() -> int:
@@ -77,6 +80,15 @@ def create_recurring():
     )
     db.session.add(item)
     db.session.commit()
+    log.info(
+        "Recurring %s created: '%s' $%.2f %s id=%s user=%s",
+        item.direction,
+        item.name,
+        item.amount_cents / 100,
+        item.frequency,
+        item.id,
+        item.user_id,
+    )
     return jsonify({"recurring": item.to_dict()}), 201
 
 
@@ -112,4 +124,5 @@ def delete_recurring(item_id: int):
     item = _get_owned(item_id)
     db.session.delete(item)
     db.session.commit()
+    log.info("Recurring item deleted: id=%s user=%s", item_id, _current_user_id())
     return jsonify({"deleted": item_id})

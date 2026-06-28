@@ -3,6 +3,8 @@
 Every query is scoped to the authenticated user so one user can never see or
 touch another's accounts.
 """
+import logging
+
 from flask import Blueprint, jsonify, request
 from flask_jwt_extended import get_jwt_identity, jwt_required
 
@@ -11,6 +13,7 @@ from ..models import ACCOUNT_TYPES, Account
 from ..utils import ApiError, dollars_to_cents, require_str
 
 accounts_bp = Blueprint("accounts", __name__)
+log = logging.getLogger("savesmart.accounts")
 
 
 def _current_user_id() -> int:
@@ -57,6 +60,13 @@ def create_account():
     )
     db.session.add(account)
     db.session.commit()
+    log.info(
+        "Account created: '%s' (%s) id=%s user=%s",
+        account.name,
+        account.account_type,
+        account.id,
+        account.user_id,
+    )
     return jsonify({"account": account.to_dict()}), 201
 
 
@@ -87,4 +97,5 @@ def delete_account(account_id: int):
     account = _get_owned_account(account_id)
     db.session.delete(account)
     db.session.commit()
+    log.info("Account deleted: id=%s user=%s", account_id, _current_user_id())
     return jsonify({"deleted": account_id})

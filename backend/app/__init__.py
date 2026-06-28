@@ -9,12 +9,14 @@ from flask_cors import CORS
 
 from .config import Config
 from .extensions import db, jwt
+from .logging_config import configure_logging
 
 
 def create_app(config_object: type = Config) -> Flask:
     app = Flask(__name__)
     app.config.from_object(config_object)
 
+    configure_logging(app)
     db.init_app(app)
     jwt.init_app(app)
     CORS(
