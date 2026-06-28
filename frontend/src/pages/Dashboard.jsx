@@ -3,9 +3,19 @@ import { api } from "../api/client";
 import { useAuth } from "../context/AuthContext.jsx";
 import AccountForm from "../components/AccountForm.jsx";
 import GoalForm from "../components/GoalForm.jsx";
+import RecurringForm from "../components/RecurringForm.jsx";
 
 const money = (n) =>
   n.toLocaleString("en-US", { style: "currency", currency: "USD" });
+
+const formatDate = (iso) =>
+  // Append a time so the ISO date is parsed in local time, not UTC (avoids an
+  // off-by-one day when formatting).
+  new Date(`${iso}T00:00:00`).toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
 
 const TYPE_LABELS = {
   checking: "Checking",
@@ -16,26 +26,69 @@ const TYPE_LABELS = {
   cash: "Cash",
 };
 
+const FREQ_LABELS = {
+  weekly: "Weekly",
+  biweekly: "Every 2 weeks",
+  monthly: "Monthly",
+  quarterly: "Quarterly",
+  annually: "Annually",
+};
+
+// Renders the per-goal achievement-date projection in human terms.
+function Projection({ projection }) {
+  if (!projection) return null;
+  switch (projection.status) {
+    case "achieved":
+      return <span className="proj good">✓ Goal reached</span>;
+    case "on_track":
+      return (
+        <span className="proj good">
+          🎯 Projected {formatDate(projection.projected_date)} · ~
+          {projection.months_to_goal} mo
+        </span>
+      );
+    case "no_surplus":
+      return (
+        <span className="proj warn">
+          No monthly surplus to allocate — expenses meet or exceed income
+        </span>
+      );
+    default: // no_data
+      return (
+        <span className="proj muted">
+          Add income &amp; expenses to project a date
+        </span>
+      );
+  }
+}
+
 export default function Dashboard() {
   const { user, logout } = useAuth();
   const [accounts, setAccounts] = useState([]);
   const [goals, setGoals] = useState([]);
+  const [recurring, setRecurring] = useState([]);
+  const [cashflow, setCashflow] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
-  // Which form is open: null | "new" | account/goal id being edited.
+  // Which form is open: null | "new" | id being edited.
   const [accountForm, setAccountForm] = useState(null);
   const [goalForm, setGoalForm] = useState(null);
+  const [recurringForm, setRecurringForm] = useState(null);
 
   async function refresh() {
     setError("");
     try {
-      const [a, g] = await Promise.all([
+      const [a, g, r, s] = await Promise.all([
         api.get("/accounts"),
         api.get("/goals"),
+        api.get("/recurring"),
+        api.get("/recurring/summary"),
       ]);
       setAccounts(a.accounts);
       setGoals(g.goals);
+      setRecurring(r.recurring);
+      setCashflow(s);
     } catch (err) {
       setError(err.message);
     } finally {
@@ -59,11 +112,8 @@ export default function Dashboard() {
   }, [accounts]);
 
   async function saveAccount(payload) {
-    if (accountForm === "new") {
-      await api.post("/accounts", payload);
-    } else {
-      await api.put(`/accounts/${accountForm}`, payload);
-    }
+    if (accountForm === "new") await api.post("/accounts", payload);
+    else await api.put(`/accounts/${accountForm}`, payload);
     setAccountForm(null);
     await refresh();
   }
@@ -75,11 +125,8 @@ export default function Dashboard() {
   }
 
   async function saveGoal(payload) {
-    if (goalForm === "new") {
-      await api.post("/goals", payload);
-    } else {
-      await api.put(`/goals/${goalForm}`, payload);
-    }
+    if (goalForm === "new") await api.post("/goals", payload);
+    else await api.put(`/goals/${goalForm}`, payload);
     setGoalForm(null);
     await refresh();
   }
@@ -90,7 +137,23 @@ export default function Dashboard() {
     await refresh();
   }
 
+  async function saveRecurring(payload) {
+    if (recurringForm === "new") await api.post("/recurring", payload);
+    else await api.put(`/recurring/${recurringForm}`, payload);
+    setRecurringForm(null);
+    // Goals re-fetch here too: their projections depend on cashflow.
+    await refresh();
+  }
+
+  async function deleteRecurring(id) {
+    if (!confirm("Delete this item?")) return;
+    await api.del(`/recurring/${id}`);
+    await refresh();
+  }
+
   if (loading) return <div className="centered">Loading…</div>;
+
+  const surplus = cashflow?.monthly_net ?? 0;
 
   return (
     <div className="app">
@@ -123,6 +186,7 @@ export default function Dashboard() {
         </div>
       </section>
 
+      {/* ---- Accounts ---- */}
       <section className="container">
         <div className="section-head">
           <h2>Accounts</h2>
@@ -191,6 +255,101 @@ export default function Dashboard() {
         </div>
       </section>
 
+      {/* ---- Recurring income & expenses ---- */}
+      <section className="container">
+        <div className="section-head">
+          <h2>Income &amp; Expenses</h2>
+          {recurringForm !== "new" && (
+            <button onClick={() => setRecurringForm("new")}>+ Add item</button>
+          )}
+        </div>
+
+        <div className="summary three">
+          <div className="card stat">
+            <span className="stat-label">Monthly Income</span>
+            <span className="stat-value">
+              {money(cashflow?.monthly_income ?? 0)}
+            </span>
+          </div>
+          <div className="card stat">
+            <span className="stat-label">Monthly Expenses</span>
+            <span className="stat-value">
+              {money(cashflow?.monthly_expenses ?? 0)}
+            </span>
+          </div>
+          <div className="card stat">
+            <span className="stat-label">Monthly Surplus</span>
+            <span className={`stat-value ${surplus < 0 ? "negative" : "good"}`}>
+              {money(surplus)}
+            </span>
+          </div>
+        </div>
+
+        {recurringForm === "new" && (
+          <div className="card">
+            <RecurringForm
+              onSubmit={saveRecurring}
+              onCancel={() => setRecurringForm(null)}
+            />
+          </div>
+        )}
+
+        {recurring.length === 0 && recurringForm !== "new" && (
+          <p className="muted">
+            Add your salary and regular bills to project goal dates.
+          </p>
+        )}
+
+        <div className="list">
+          {recurring.map((item) =>
+            recurringForm === item.id ? (
+              <div className="card" key={item.id}>
+                <RecurringForm
+                  initial={item}
+                  onSubmit={saveRecurring}
+                  onCancel={() => setRecurringForm(null)}
+                />
+              </div>
+            ) : (
+              <div className="card row" key={item.id}>
+                <div>
+                  <div className="row-title">{item.name}</div>
+                  <div className="muted small">
+                    {FREQ_LABELS[item.frequency] ?? item.frequency} ·{" "}
+                    {money(item.monthly_amount)}/mo
+                  </div>
+                </div>
+                <div className="row-right">
+                  <span
+                    className={`amount ${
+                      item.direction === "expense" ? "negative" : "good"
+                    }`}
+                  >
+                    {item.direction === "expense" ? "-" : "+"}
+                    {money(item.amount)}
+                  </span>
+                  <div className="row-actions">
+                    <button
+                      className="ghost small"
+                      onClick={() => setRecurringForm(item.id)}
+                    >
+                      Edit
+                    </button>
+                    <button
+                      className="ghost small danger"
+                      onClick={() => deleteRecurring(item.id)}
+                    >
+                      Delete
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )
+          )}
+        </div>
+      </section>
+
+      {/* ---- Savings goals ---- */}
       <section className="container">
         <div className="section-head">
           <h2>Savings Goals</h2>
@@ -198,6 +357,13 @@ export default function Dashboard() {
             <button onClick={() => setGoalForm("new")}>+ Add goal</button>
           )}
         </div>
+
+        {surplus > 0 && (
+          <p className="muted small note">
+            Projected dates assume your full {money(surplus)}/mo surplus goes
+            toward each goal.
+          </p>
+        )}
 
         {goalForm === "new" && (
           <div className="card">
@@ -226,7 +392,7 @@ export default function Dashboard() {
                     <div className="row-title">{goal.name}</div>
                     <div className="muted small">
                       {money(goal.current_amount)} of {money(goal.target_amount)}
-                      {goal.target_date ? ` · by ${goal.target_date}` : ""}
+                      {goal.target_date ? ` · target ${goal.target_date}` : ""}
                     </div>
                   </div>
                   <div className="row-actions">
@@ -250,7 +416,10 @@ export default function Dashboard() {
                     style={{ width: `${goal.progress_pct}%` }}
                   />
                 </div>
-                <div className="muted small">{goal.progress_pct}% there</div>
+                <div className="goal-foot">
+                  <span className="muted small">{goal.progress_pct}% there</span>
+                  <Projection projection={goal.projection} />
+                </div>
               </div>
             )
           )}

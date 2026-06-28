@@ -30,10 +30,12 @@ def create_app(config_object: type = Config) -> Flask:
     from .auth.routes import auth_bp
     from .accounts.routes import accounts_bp
     from .goals.routes import goals_bp
+    from .recurring.routes import recurring_bp
 
     app.register_blueprint(auth_bp, url_prefix="/api/auth")
     app.register_blueprint(accounts_bp, url_prefix="/api/accounts")
     app.register_blueprint(goals_bp, url_prefix="/api/goals")
+    app.register_blueprint(recurring_bp, url_prefix="/api/recurring")
 
     # Translate ApiError raised anywhere in a route into a JSON response.
     from .utils import ApiError, error_response

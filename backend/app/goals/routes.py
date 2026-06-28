@@ -8,6 +8,7 @@ from datetime import date
 from flask import Blueprint, jsonify, request
 from flask_jwt_extended import get_jwt_identity, jwt_required
 
+from ..cashflow import monthly_cashflow, project_goal
 from ..extensions import db
 from ..models import SavingsGoal
 from ..utils import ApiError, dollars_to_cents, require_str
@@ -17,6 +18,19 @@ goals_bp = Blueprint("goals", __name__)
 
 def _current_user_id() -> int:
     return int(get_jwt_identity())
+
+
+def _serialize(goal: SavingsGoal, cash: dict = None) -> dict:
+    """Goal dict plus its projected achievement date.
+
+    Pass a precomputed `cash` summary when serializing many goals so we only
+    query recurring items once.
+    """
+    if cash is None:
+        cash = monthly_cashflow(goal.user_id)
+    data = goal.to_dict()
+    data["projection"] = project_goal(goal, cash["net"], cash["count"] > 0)
+    return data
 
 
 def _get_owned_goal(goal_id: int) -> SavingsGoal:
@@ -41,12 +55,14 @@ def _parse_target_date(value):
 @goals_bp.get("")
 @jwt_required()
 def list_goals():
+    user_id = _current_user_id()
     goals = (
-        SavingsGoal.query.filter_by(user_id=_current_user_id())
+        SavingsGoal.query.filter_by(user_id=user_id)
         .order_by(SavingsGoal.created_at.asc())
         .all()
     )
-    return jsonify({"goals": [g.to_dict() for g in goals]})
+    cash = monthly_cashflow(user_id)
+    return jsonify({"goals": [_serialize(g, cash) for g in goals]})
 
 
 @goals_bp.post("")
@@ -64,7 +80,7 @@ def create_goal():
         raise ApiError("'target_amount' must be greater than zero.")
     db.session.add(goal)
     db.session.commit()
-    return jsonify({"goal": goal.to_dict()}), 201
+    return jsonify({"goal": _serialize(goal)}), 201
 
 
 @goals_bp.put("/<int:goal_id>")
@@ -87,7 +103,7 @@ def update_goal(goal_id: int):
         goal.target_date = _parse_target_date(data.get("target_date"))
 
     db.session.commit()
-    return jsonify({"goal": goal.to_dict()})
+    return jsonify({"goal": _serialize(goal)})
 
 
 @goals_bp.delete("/<int:goal_id>")

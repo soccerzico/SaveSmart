@@ -26,6 +26,21 @@ ACCOUNT_TYPES = {
     "cash",
 }
 
+# Recurring cashflow items are either money in or money out.
+DIRECTIONS = {"income", "expense"}
+
+# Supported recurrence intervals and how many times they occur per month, used
+# to normalize everything onto a common monthly basis for cashflow math.
+# (Weekly/biweekly use the average: 52 and 26 occurrences spread over 12 months.)
+FREQUENCIES = {"weekly", "biweekly", "monthly", "quarterly", "annually"}
+_MONTHLY_FACTOR = {
+    "weekly": 52 / 12,
+    "biweekly": 26 / 12,
+    "monthly": 1.0,
+    "quarterly": 1 / 3,
+    "annually": 1 / 12,
+}
+
 
 class User(db.Model):
     __tablename__ = "users"
@@ -118,6 +133,46 @@ class SavingsGoal(db.Model):
             "current_amount": round(self.current_cents / 100, 2),
             "progress_pct": min(progress, 100.0),
             "target_date": self.target_date.isoformat() if self.target_date else None,
+            "created_at": self.created_at.isoformat(),
+            "updated_at": self.updated_at.isoformat(),
+        }
+
+
+class RecurringTransaction(db.Model):
+    """A recurring income or expense, used to derive monthly cashflow.
+
+    Manual entry for now. Each row is normalized to a monthly amount via
+    `monthly_cents` so income and expenses on different cadences can be summed.
+    """
+
+    __tablename__ = "recurring_transactions"
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(
+        db.Integer, db.ForeignKey("users.id"), nullable=False, index=True
+    )
+    name = db.Column(db.String(120), nullable=False)
+    direction = db.Column(db.String(16), nullable=False)  # income | expense
+    amount_cents = db.Column(db.Integer, nullable=False)
+    frequency = db.Column(db.String(16), nullable=False)
+    created_at = db.Column(db.DateTime(timezone=True), default=_utcnow, nullable=False)
+    updated_at = db.Column(
+        db.DateTime(timezone=True), default=_utcnow, onupdate=_utcnow, nullable=False
+    )
+
+    @property
+    def monthly_cents(self) -> float:
+        """This item's contribution to a monthly budget, in (fractional) cents."""
+        return self.amount_cents * _MONTHLY_FACTOR[self.frequency]
+
+    def to_dict(self) -> dict:
+        return {
+            "id": self.id,
+            "name": self.name,
+            "direction": self.direction,
+            "frequency": self.frequency,
+            "amount": round(self.amount_cents / 100, 2),
+            "monthly_amount": round(self.monthly_cents / 100, 2),
             "created_at": self.created_at.isoformat(),
             "updated_at": self.updated_at.isoformat(),
         }
