@@ -4,6 +4,7 @@ Money is stored in integer cents to avoid floating-point rounding errors.
 The API serializes to/from decimal dollars at the edges (see to_dict / the
 routes), so the rest of the app and the frontend deal in plain dollar floats.
 """
+import json
 from datetime import datetime, timezone
 
 from werkzeug.security import check_password_hash, generate_password_hash
@@ -25,6 +26,9 @@ ACCOUNT_TYPES = {
     "loan",
     "cash",
 }
+
+# Where an account's data comes from: hand-entered vs synced from Plaid.
+ACCOUNT_SOURCES = {"manual", "plaid"}
 
 # Recurring cashflow items are either money in or money out.
 DIRECTIONS = {"income", "expense"}
@@ -56,6 +60,12 @@ class User(db.Model):
     goals = db.relationship(
         "SavingsGoal", backref="user", cascade="all, delete-orphan", lazy=True
     )
+    plaid_items = db.relationship(
+        "PlaidItem", backref="user", cascade="all, delete-orphan", lazy=True
+    )
+    snapshots = db.relationship(
+        "Snapshot", backref="user", cascade="all, delete-orphan", lazy=True
+    )
 
     def set_password(self, password: str) -> None:
         # pbkdf2:sha256 is bundled with werkzeug — no native deps to compile.
@@ -85,6 +95,16 @@ class Account(db.Model):
     # Stored in cents. For credit cards / loans this represents what you owe
     # (a balance you carry); the frontend labels it as a liability.
     balance_cents = db.Column(db.Integer, nullable=False, default=0)
+
+    # Provenance. Manual accounts are user-editable; Plaid accounts are synced
+    # and treated as a read-only baseline (see the accounts routes).
+    source = db.Column(db.String(16), nullable=False, default="manual")
+    plaid_item_id = db.Column(
+        db.Integer, db.ForeignKey("plaid_items.id"), nullable=True, index=True
+    )
+    # Plaid's own account identifier; lets us upsert on re-sync. NULL for manual.
+    plaid_account_id = db.Column(db.String(64), nullable=True, unique=True, index=True)
+
     created_at = db.Column(db.DateTime(timezone=True), default=_utcnow, nullable=False)
     updated_at = db.Column(
         db.DateTime(timezone=True), default=_utcnow, onupdate=_utcnow, nullable=False
@@ -102,6 +122,9 @@ class Account(db.Model):
             "institution": self.institution,
             "balance": round(self.balance_cents / 100, 2),
             "is_liability": self.is_liability,
+            "source": self.source,
+            # Plaid-synced accounts are a read-only baseline in the UI.
+            "editable": self.source == "manual",
             "created_at": self.created_at.isoformat(),
             "updated_at": self.updated_at.isoformat(),
         }
@@ -175,4 +198,81 @@ class RecurringTransaction(db.Model):
             "monthly_amount": round(self.monthly_cents / 100, 2),
             "created_at": self.created_at.isoformat(),
             "updated_at": self.updated_at.isoformat(),
+        }
+
+
+class PlaidItem(db.Model):
+    """A linked financial institution (one Plaid 'Item' = one bank login).
+
+    The access_token is long-lived and lets us re-pull balances without the
+    user re-authenticating. POC-grade: stored in plaintext — encrypt at rest
+    before this is anything but local/dev.
+    """
+
+    __tablename__ = "plaid_items"
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(
+        db.Integer, db.ForeignKey("users.id"), nullable=False, index=True
+    )
+    item_id = db.Column(db.String(64), unique=True, nullable=False, index=True)
+    access_token = db.Column(db.String(128), nullable=False)
+    institution_name = db.Column(db.String(120), nullable=True)
+    created_at = db.Column(db.DateTime(timezone=True), default=_utcnow, nullable=False)
+
+    def to_dict(self) -> dict:
+        return {
+            "id": self.id,
+            "item_id": self.item_id,
+            "institution_name": self.institution_name,
+            "created_at": self.created_at.isoformat(),
+        }
+
+
+class Snapshot(db.Model):
+    """A point-in-time capture of the user's finances, written on login.
+
+    The numeric columns are the trustworthy, queryable source of truth (the app
+    writes them deterministically). `goals_json` holds the flexible per-goal
+    detail without needing a child table, and `note` is a free-text lane for
+    qualitative/abstract context the assistant can reason over.
+    """
+
+    __tablename__ = "snapshots"
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(
+        db.Integer, db.ForeignKey("users.id"), nullable=False, index=True
+    )
+    created_at = db.Column(
+        db.DateTime(timezone=True), default=_utcnow, nullable=False, index=True
+    )
+
+    net_worth_cents = db.Column(db.Integer, nullable=False, default=0)
+    assets_cents = db.Column(db.Integer, nullable=False, default=0)
+    liabilities_cents = db.Column(db.Integer, nullable=False, default=0)
+    monthly_income_cents = db.Column(db.Integer, nullable=False, default=0)
+    monthly_expense_cents = db.Column(db.Integer, nullable=False, default=0)
+    monthly_net_cents = db.Column(db.Integer, nullable=False, default=0)
+
+    # JSON array of {name, target, current, progress_pct} per goal at capture time.
+    goals_json = db.Column(db.Text, nullable=False, default="[]")
+    note = db.Column(db.Text, nullable=True)
+
+    def to_dict(self) -> dict:
+        try:
+            goals = json.loads(self.goals_json)
+        except (TypeError, ValueError):
+            goals = []
+        return {
+            "id": self.id,
+            "created_at": self.created_at.isoformat(),
+            "net_worth": round(self.net_worth_cents / 100, 2),
+            "assets": round(self.assets_cents / 100, 2),
+            "liabilities": round(self.liabilities_cents / 100, 2),
+            "monthly_income": round(self.monthly_income_cents / 100, 2),
+            "monthly_expenses": round(self.monthly_expense_cents / 100, 2),
+            "monthly_net": round(self.monthly_net_cents / 100, 2),
+            "goals": goals,
+            "note": self.note,
         }

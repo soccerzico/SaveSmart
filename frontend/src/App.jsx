@@ -3,6 +3,7 @@ import { useAuth } from "./context/AuthContext.jsx";
 import Login from "./pages/Login.jsx";
 import Register from "./pages/Register.jsx";
 import Dashboard from "./pages/Dashboard.jsx";
+import Assistant from "./pages/Assistant.jsx";
 
 // Gate that redirects unauthenticated users to /login.
 function RequireAuth({ children }) {
@@ -28,6 +29,14 @@ export default function App() {
         element={
           <RequireAuth>
             <Dashboard />
+          </RequireAuth>
+        }
+      />
+      <Route
+        path="/assistant"
+        element={
+          <RequireAuth>
+            <Assistant />
           </RequireAuth>
         }
       />

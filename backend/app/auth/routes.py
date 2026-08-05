@@ -69,6 +69,16 @@ def login():
         raise ApiError("Invalid email or password.", status=401)
 
     log.info("User logged in: %s (id=%s)", email, user.id)
+
+    # Capture a point-in-time snapshot so progress is tracked over time. Never
+    # let a snapshot hiccup block login.
+    try:
+        from ..snapshots import write_snapshot
+
+        write_snapshot(user.id)
+    except Exception:  # noqa: BLE001
+        log.exception("Failed to write login snapshot for user=%s", user.id)
+
     token = create_access_token(identity=str(user.id))
     return jsonify({"access_token": token, "user": user.to_dict()})
 

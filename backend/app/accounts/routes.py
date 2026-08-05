@@ -29,6 +29,17 @@ def _get_owned_account(account_id: int) -> Account:
     return account
 
 
+def _require_manual(account: Account) -> Account:
+    """Plaid-synced accounts are a read-only baseline; block manual edits."""
+    if account.source != "manual":
+        raise ApiError(
+            "This account is linked through Plaid and updates automatically. "
+            "Disconnect the institution to remove it.",
+            status=409,
+        )
+    return account
+
+
 def _validate_type(account_type: str) -> str:
     if account_type not in ACCOUNT_TYPES:
         allowed = ", ".join(sorted(ACCOUNT_TYPES))
@@ -73,7 +84,7 @@ def create_account():
 @accounts_bp.put("/<int:account_id>")
 @jwt_required()
 def update_account(account_id: int):
-    account = _get_owned_account(account_id)
+    account = _require_manual(_get_owned_account(account_id))
     data = request.get_json(silent=True) or {}
 
     if "name" in data:
@@ -94,7 +105,7 @@ def update_account(account_id: int):
 @accounts_bp.delete("/<int:account_id>")
 @jwt_required()
 def delete_account(account_id: int):
-    account = _get_owned_account(account_id)
+    account = _require_manual(_get_owned_account(account_id))
     db.session.delete(account)
     db.session.commit()
     log.info("Account deleted: id=%s user=%s", account_id, _current_user_id())

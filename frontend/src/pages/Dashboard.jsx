@@ -1,9 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
+import { Link } from "react-router-dom";
 import { api } from "../api/client";
 import { useAuth } from "../context/AuthContext.jsx";
 import AccountForm from "../components/AccountForm.jsx";
 import GoalForm from "../components/GoalForm.jsx";
 import RecurringForm from "../components/RecurringForm.jsx";
+import PlaidLinkButton from "../components/PlaidLinkButton.jsx";
 
 const money = (n) =>
   n.toLocaleString("en-US", { style: "currency", currency: "USD" });
@@ -68,6 +70,9 @@ export default function Dashboard() {
   const [goals, setGoals] = useState([]);
   const [recurring, setRecurring] = useState([]);
   const [cashflow, setCashflow] = useState(null);
+  const [plaidItems, setPlaidItems] = useState([]);
+  const [plaidConfigured, setPlaidConfigured] = useState(false);
+  const [syncing, setSyncing] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
@@ -79,16 +84,20 @@ export default function Dashboard() {
   async function refresh() {
     setError("");
     try {
-      const [a, g, r, s] = await Promise.all([
+      const [a, g, r, s, ps, pi] = await Promise.all([
         api.get("/accounts"),
         api.get("/goals"),
         api.get("/recurring"),
         api.get("/recurring/summary"),
+        api.get("/plaid/status"),
+        api.get("/plaid/items"),
       ]);
       setAccounts(a.accounts);
       setGoals(g.goals);
       setRecurring(r.recurring);
       setCashflow(s);
+      setPlaidConfigured(ps.configured);
+      setPlaidItems(pi.items);
     } catch (err) {
       setError(err.message);
     } finally {
@@ -122,6 +131,29 @@ export default function Dashboard() {
     if (!confirm("Delete this account?")) return;
     await api.del(`/accounts/${id}`);
     await refresh();
+  }
+
+  async function syncPlaid() {
+    setSyncing(true);
+    setError("");
+    try {
+      await api.post("/plaid/sync");
+      await refresh();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setSyncing(false);
+    }
+  }
+
+  async function disconnectInstitution(itemId) {
+    if (!confirm("Disconnect this institution and remove its accounts?")) return;
+    try {
+      await api.post("/plaid/items/remove", { item_id: itemId });
+      await refresh();
+    } catch (err) {
+      setError(err.message);
+    }
   }
 
   async function saveGoal(payload) {
@@ -160,6 +192,9 @@ export default function Dashboard() {
       <header className="topbar">
         <h1 className="brand">SaveSmart</h1>
         <div className="topbar-right">
+          <Link className="navlink" to="/assistant">
+            💬 Assistant
+          </Link>
           <span className="muted">{user?.email}</span>
           <button className="ghost" onClick={logout}>
             Log out
@@ -190,10 +225,35 @@ export default function Dashboard() {
       <section className="container">
         <div className="section-head">
           <h2>Accounts</h2>
-          {accountForm !== "new" && (
-            <button onClick={() => setAccountForm("new")}>+ Add account</button>
-          )}
+          <div className="head-actions">
+            {plaidConfigured && <PlaidLinkButton onLinked={refresh} />}
+            {plaidItems.length > 0 && (
+              <button className="ghost" onClick={syncPlaid} disabled={syncing}>
+                {syncing ? "Syncing…" : "↻ Sync"}
+              </button>
+            )}
+            {accountForm !== "new" && (
+              <button onClick={() => setAccountForm("new")}>+ Add account</button>
+            )}
+          </div>
         </div>
+
+        {plaidItems.length > 0 && (
+          <div className="institutions">
+            {plaidItems.map((item) => (
+              <span className="institution-chip" key={item.item_id}>
+                🏦 {item.institution_name || "Linked institution"}
+                <button
+                  className="chip-x"
+                  title="Disconnect"
+                  onClick={() => disconnectInstitution(item.item_id)}
+                >
+                  ×
+                </button>
+              </span>
+            ))}
+          </div>
+        )}
 
         {accountForm === "new" && (
           <div className="card">
@@ -221,7 +281,12 @@ export default function Dashboard() {
             ) : (
               <div className="card row" key={acct.id}>
                 <div>
-                  <div className="row-title">{acct.name}</div>
+                  <div className="row-title">
+                    {acct.name}
+                    {acct.source === "plaid" && (
+                      <span className="badge">Linked</span>
+                    )}
+                  </div>
                   <div className="muted small">
                     {TYPE_LABELS[acct.account_type] ?? acct.account_type}
                     {acct.institution ? ` · ${acct.institution}` : ""}
@@ -235,18 +300,24 @@ export default function Dashboard() {
                     {money(acct.balance)}
                   </span>
                   <div className="row-actions">
-                    <button
-                      className="ghost small"
-                      onClick={() => setAccountForm(acct.id)}
-                    >
-                      Edit
-                    </button>
-                    <button
-                      className="ghost small danger"
-                      onClick={() => deleteAccount(acct.id)}
-                    >
-                      Delete
-                    </button>
+                    {acct.editable ? (
+                      <>
+                        <button
+                          className="ghost small"
+                          onClick={() => setAccountForm(acct.id)}
+                        >
+                          Edit
+                        </button>
+                        <button
+                          className="ghost small danger"
+                          onClick={() => deleteAccount(acct.id)}
+                        >
+                          Delete
+                        </button>
+                      </>
+                    ) : (
+                      <span className="muted small">Auto-synced</span>
+                    )}
                   </div>
                 </div>
               </div>

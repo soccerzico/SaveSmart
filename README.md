@@ -97,10 +97,30 @@ All money is sent/received as decimal dollars. Protected routes require an
 | POST   | `/api/goals`          | ✓    | Create goal                   |
 | PUT    | `/api/goals/:id`      | ✓    | Update goal                   |
 | DELETE | `/api/goals/:id`      | ✓    | Delete goal                   |
+| GET/POST/PUT/DELETE | `/api/recurring[...]` | ✓ | Recurring income/expenses     |
+| POST   | `/api/plaid/create_link_token`     | ✓ | Start Plaid Link          |
+| POST   | `/api/plaid/exchange_public_token` | ✓ | Link an institution       |
+| POST   | `/api/plaid/sync`                  | ✓ | Refresh linked balances   |
+| GET    | `/api/plaid/items`                 | ✓ | Linked institutions       |
+| POST   | `/api/plaid/items/remove`          | ✓ | Disconnect institution    |
+| POST   | `/api/assistant/chat`              | ✓ | Chat with the Haiku assistant |
+| GET/POST | `/api/assistant/snapshots`       | ✓ | List / capture snapshots  |
 
 **Account types:** `checking`, `savings`, `credit_card`, `investment`, `loan`,
 `cash`. `credit_card` and `loan` are treated as liabilities and subtracted from
 net worth.
+
+## Bank linking (Plaid) & assistant
+
+- **Plaid** — "Connect a bank" links an institution; its accounts are synced in
+  as read-only `source='plaid'` baseline rows that sit alongside manual accounts
+  in net-worth math. Set `PLAID_CLIENT_ID` / `PLAID_SECRET` / `PLAID_ENV` in
+  `backend/.env` to enable it (sandbox login: `user_good` / `pass_good`).
+- **Assistant** — a Claude Haiku chat (`/assistant`) that reads the user's
+  finances and snapshot history. Needs `ANTHROPIC_API_KEY` in `backend/.env`.
+- **Snapshots** — on each login the app records a point-in-time capture (net
+  worth, assets/liabilities, cashflow, per-goal detail) so progress is tracked
+  over time; the assistant reads these but never writes the numbers.
 
 ## Implementation notes
 
@@ -113,10 +133,12 @@ net worth.
 
 ## Roadmap
 
-- [ ] Flask-Migrate for schema migrations
-- [ ] Automated balance sync via an aggregation API (Plaid / MX / Finicity)
-- [ ] Transactions & spending categorization
-- [ ] Contribution scheduling and goal projections (will I hit the target date?)
+- [x] Automated balance sync via Plaid (link + sync + disconnect)
+- [x] Financial snapshots + Claude Haiku assistant over your data
+- [ ] Flask-Migrate for schema migrations (currently a small auto-column shim)
+- [ ] Encrypt Plaid access tokens at rest (currently plaintext — POC-grade)
+- [ ] Transactions & spending categorization (`/transactions/sync`)
+- [ ] Plaid Link update mode for re-auth (`ITEM_LOGIN_REQUIRED`)
 - [ ] Move JWT from localStorage to httpOnly refresh-token cookies
 - [ ] Test suite (pytest for the API, Vitest for the UI)
 ```

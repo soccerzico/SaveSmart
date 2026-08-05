@@ -33,11 +33,15 @@ def create_app(config_object: type = Config) -> Flask:
     from .accounts.routes import accounts_bp
     from .goals.routes import goals_bp
     from .recurring.routes import recurring_bp
+    from .plaid.routes import plaid_bp
+    from .assistant.routes import assistant_bp
 
     app.register_blueprint(auth_bp, url_prefix="/api/auth")
     app.register_blueprint(accounts_bp, url_prefix="/api/accounts")
     app.register_blueprint(goals_bp, url_prefix="/api/goals")
     app.register_blueprint(recurring_bp, url_prefix="/api/recurring")
+    app.register_blueprint(plaid_bp, url_prefix="/api/plaid")
+    app.register_blueprint(assistant_bp, url_prefix="/api/assistant")
 
     # Translate ApiError raised anywhere in a route into a JSON response.
     from .utils import ApiError, error_response
@@ -54,5 +58,32 @@ def create_app(config_object: type = Config) -> Flask:
     # (Flask-Migrate) later; create_all is fine while the schema is young.
     with app.app_context():
         db.create_all()
+        _ensure_account_columns()
 
     return app
+
+
+def _ensure_account_columns():
+    """Additive, idempotent migration for columns create_all won't add to an
+    existing SQLite `accounts` table. Protects data across the schema churn
+    while we're pre-Flask-Migrate. No-op on non-SQLite backends.
+    """
+    from sqlalchemy import text
+
+    if db.engine.dialect.name != "sqlite":
+        return
+    existing = {
+        row[1] for row in db.session.execute(text("PRAGMA table_info(accounts)"))
+    }
+    additions = {
+        "source": "ALTER TABLE accounts ADD COLUMN source VARCHAR(16) NOT NULL DEFAULT 'manual'",
+        "plaid_item_id": "ALTER TABLE accounts ADD COLUMN plaid_item_id INTEGER",
+        "plaid_account_id": "ALTER TABLE accounts ADD COLUMN plaid_account_id VARCHAR(64)",
+    }
+    changed = False
+    for col, ddl in additions.items():
+        if col not in existing:
+            db.session.execute(text(ddl))
+            changed = True
+    if changed:
+        db.session.commit()
