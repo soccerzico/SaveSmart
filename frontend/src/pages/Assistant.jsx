@@ -70,8 +70,13 @@ export default function Assistant() {
           <div className="callout">
             <strong>Assistant not configured.</strong>
             <p className="muted small">
-              Add <code>ANTHROPIC_API_KEY</code> to <code>backend/.env</code> and
-              restart the backend to enable chat.
+              Authenticate the backend one of two ways, then restart it:
+            </p>
+            <p className="muted small">
+              • Run <code>ant auth login</code> to use your Anthropic account via
+              OAuth (no key to manage), or
+              <br />• Add <code>ANTHROPIC_API_KEY</code> to{" "}
+              <code>backend/.env</code>.
             </p>
           </div>
         )}

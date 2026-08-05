@@ -11,6 +11,7 @@ degrade gracefully with a clear 'not configured' response.
 import json
 import logging
 import os
+from pathlib import Path
 
 from flask import Blueprint, jsonify, request
 from flask_jwt_extended import get_jwt_identity, jwt_required
@@ -18,6 +19,12 @@ from flask_jwt_extended import get_jwt_identity, jwt_required
 from ..models import Snapshot, User
 from ..snapshots import build_snapshot_values, write_snapshot
 from ..utils import ApiError
+
+# Imported defensively so the app still boots if 'anthropic' isn't installed.
+try:
+    import anthropic
+except ImportError:  # pragma: no cover
+    anthropic = None
 
 assistant_bp = Blueprint("assistant", __name__)
 log = logging.getLogger("savesmart.assistant")
@@ -27,14 +34,51 @@ MODEL = "claude-haiku-4-5"
 MAX_TOKENS = 1024
 MAX_HISTORY_MESSAGES = 20  # cap conversation length sent to the API
 
+# OAuth bearer tokens (from `ant auth login`) require this beta header on
+# /v1/messages; API keys do not.
+OAUTH_BETA = "oauth-2025-04-20"
+
 
 def _current_user_id() -> int:
     return int(get_jwt_identity())
 
 
-def _api_key() -> str | None:
-    key = os.environ.get("ANTHROPIC_API_KEY", "").strip()
-    return key or None
+def _oauth_profile_exists() -> bool:
+    """True if an `ant auth login` OAuth profile is present on disk.
+
+    The SDK resolves this profile automatically (and refreshes it) when no
+    explicit key/token is set. Location: %APPDATA%\\Anthropic on Windows,
+    ~/.config/anthropic elsewhere.
+    """
+    appdata = os.environ.get("APPDATA")
+    base = Path(appdata) / "Anthropic" if appdata else Path.home() / ".config" / "anthropic"
+    creds = base / "credentials"
+    try:
+        return creds.is_dir() and any(creds.glob("*.json"))
+    except OSError:
+        return False
+
+
+def _auth_mode() -> str:
+    """How the assistant will authenticate: 'api_key', 'oauth', or 'none'."""
+    if os.environ.get("ANTHROPIC_API_KEY", "").strip():
+        return "api_key"
+    # A bare client resolves ANTHROPIC_AUTH_TOKEN or the on-disk OAuth profile.
+    if os.environ.get("ANTHROPIC_AUTH_TOKEN", "").strip() or _oauth_profile_exists():
+        return "oauth"
+    return "none"
+
+
+def _make_client():
+    """Return (client, extra_headers) for the active auth mode, or (None, None)."""
+    mode = _auth_mode()
+    if anthropic is None or mode == "none":
+        return None, None
+    if mode == "api_key":
+        # Explicit key wins; no OAuth beta header needed.
+        return anthropic.Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"].strip()), None
+    # OAuth: bare client resolves the token/profile (auto-refreshed); add the header.
+    return anthropic.Anthropic(), {"anthropic-beta": OAUTH_BETA}
 
 
 def _dollars(cents: int) -> str:
@@ -95,7 +139,8 @@ def _build_system_prompt(user_id: int) -> str:
 @assistant_bp.get("/status")
 @jwt_required()
 def status():
-    return jsonify({"configured": _api_key() is not None, "model": MODEL})
+    mode = _auth_mode()
+    return jsonify({"configured": mode != "none", "auth_mode": mode, "model": MODEL})
 
 
 @assistant_bp.get("/snapshots")
@@ -121,10 +166,12 @@ def capture_snapshot():
 @assistant_bp.post("/chat")
 @jwt_required()
 def chat():
-    if _api_key() is None:
+    client, extra_headers = _make_client()
+    if client is None:
         raise ApiError(
-            "The assistant isn't configured. Add ANTHROPIC_API_KEY to backend/.env "
-            "and restart the server.",
+            "The assistant isn't configured. Either set ANTHROPIC_API_KEY in "
+            "backend/.env, or run `ant auth login` to authenticate with your "
+            "Anthropic account (no key needed), then restart the server.",
             status=400,
         )
 
@@ -149,16 +196,13 @@ def chat():
     if not user:
         raise ApiError("User not found.", status=404)
 
-    # Imported lazily so the app boots even if 'anthropic' isn't installed yet.
-    import anthropic
-
-    client = anthropic.Anthropic(api_key=_api_key())
     try:
         response = client.messages.create(
             model=MODEL,
             max_tokens=MAX_TOKENS,
             system=_build_system_prompt(user_id),
             messages=messages,
+            extra_headers=extra_headers,
         )
     except anthropic.APIStatusError as exc:
         log.error("Anthropic API error (%s): %s", exc.status_code, exc.message)
