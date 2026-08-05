@@ -205,7 +205,12 @@ def chat():
             extra_headers=extra_headers,
         )
     except anthropic.APIStatusError as exc:
-        log.error("Anthropic API error (%s): %s", exc.status_code, exc.message)
+        message = getattr(exc, "message", str(exc))
+        log.error("Anthropic API error (%s): %s", exc.status_code, message)
+        # Surface actionable client-side problems (billing, auth, rate limit)
+        # directly so the user knows what to fix; hide raw 5xx internals.
+        if exc.status_code in (400, 401, 402, 403, 429):
+            raise ApiError(f"Assistant error: {message}", status=502)
         raise ApiError("The assistant is temporarily unavailable.", status=502)
     except anthropic.APIConnectionError:
         log.error("Anthropic connection error")
