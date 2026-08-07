@@ -28,6 +28,15 @@ def create_app(config_object: type = Config) -> Flask:
     # Import models so SQLAlchemy is aware of them before create_all.
     from . import models  # noqa: F401
 
+    # Warn loudly if secrets-at-rest encryption isn't configured.
+    from .crypto import is_configured as _crypto_configured
+
+    if not _crypto_configured():
+        app.logger.warning(
+            "TOKEN_ENCRYPTION_KEY not set — Plaid access tokens are stored in "
+            "PLAINTEXT. Set it in backend/.env to encrypt at rest."
+        )
+
     # Register blueprints.
     from .auth.routes import auth_bp
     from .accounts.routes import accounts_bp

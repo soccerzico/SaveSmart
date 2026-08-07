@@ -9,6 +9,7 @@ from datetime import datetime, timezone
 
 from werkzeug.security import check_password_hash, generate_password_hash
 
+from .crypto import decrypt_token, encrypt_token
 from .extensions import db
 
 
@@ -216,9 +217,20 @@ class PlaidItem(db.Model):
         db.Integer, db.ForeignKey("users.id"), nullable=False, index=True
     )
     item_id = db.Column(db.String(64), unique=True, nullable=False, index=True)
-    access_token = db.Column(db.String(128), nullable=False)
+    # Stored encrypted at rest (Fernet). The `access_token` property below
+    # transparently encrypts on set and decrypts on get, so route code is
+    # unchanged. DB column keeps its name; Text holds the longer ciphertext.
+    _access_token = db.Column("access_token", db.Text, nullable=False)
     institution_name = db.Column(db.String(120), nullable=True)
     created_at = db.Column(db.DateTime(timezone=True), default=_utcnow, nullable=False)
+
+    @property
+    def access_token(self) -> str:
+        return decrypt_token(self._access_token)
+
+    @access_token.setter
+    def access_token(self, value: str) -> None:
+        self._access_token = encrypt_token(value)
 
     def to_dict(self) -> dict:
         return {
