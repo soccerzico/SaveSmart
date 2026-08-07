@@ -28,13 +28,14 @@ def create_app(config_object: type = Config) -> Flask:
     # Import models so SQLAlchemy is aware of them before create_all.
     from . import models  # noqa: F401
 
-    # Warn loudly if secrets-at-rest encryption isn't configured.
+    # A key auto-generates on first use; warn only if that failed (e.g. the
+    # instance/ folder isn't writable), which would leave tokens in plaintext.
     from .crypto import is_configured as _crypto_configured
 
     if not _crypto_configured():
         app.logger.warning(
-            "TOKEN_ENCRYPTION_KEY not set — Plaid access tokens are stored in "
-            "PLAINTEXT. Set it in backend/.env to encrypt at rest."
+            "Secrets-at-rest encryption is NOT active (could not load or create "
+            "a key) — Plaid access tokens will be stored in PLAINTEXT."
         )
 
     # Register blueprints.
