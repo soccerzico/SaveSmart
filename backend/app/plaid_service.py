@@ -84,6 +84,21 @@ def to_account_type(plaid_type, plaid_subtype) -> str:
 
 
 def balance_to_cents(plaid_account) -> int:
-    """Current balance in cents. For credit/loan this is what's owed (a liability)."""
-    current = plaid_account["balances"].get("current") or 0
-    return round(current * 100)
+    """Balance in cents, choosing the field that best reflects reality per type.
+
+    Depository (checking/savings/cash): prefer Plaid's ``available`` balance,
+    which includes pending credits/debits (a just-made deposit shows here before
+    it posts to ``current``). Falls back to ``current`` when unavailable.
+
+    Credit/loan/investment: use ``current`` — for a card that's the amount owed,
+    not the remaining credit line (``available`` would be the wrong number).
+    """
+    balances = plaid_account["balances"]
+    acct_type = str(plaid_account.get("type") or "")
+    if acct_type == "depository":
+        value = balances.get("available")
+        if value is None:
+            value = balances.get("current")
+    else:
+        value = balances.get("current")
+    return round((value or 0) * 100)
