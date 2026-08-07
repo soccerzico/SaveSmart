@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { api } from "../api/client";
 import { useAuth } from "../context/AuthContext.jsx";
@@ -75,6 +75,8 @@ export default function Dashboard() {
   const [syncing, setSyncing] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  // Guards the one-time auto-sync so it doesn't loop on every refresh.
+  const didAutoSync = useRef(false);
 
   // Which form is open: null | "new" | id being edited.
   const [accountForm, setAccountForm] = useState(null);
@@ -108,6 +110,17 @@ export default function Dashboard() {
   useEffect(() => {
     refresh();
   }, []);
+
+  // Auto-sync linked balances once, in the background, after the initial load.
+  // The dashboard renders instantly from the DB; freshly-synced balances then
+  // appear a moment later without the user clicking "Sync".
+  useEffect(() => {
+    if (loading || didAutoSync.current) return;
+    if (plaidConfigured && plaidItems.length > 0) {
+      didAutoSync.current = true;
+      syncPlaid();
+    }
+  }, [loading, plaidConfigured, plaidItems]);
 
   // Net worth = assets minus liabilities (credit cards / loans).
   const { assets, liabilities, netWorth } = useMemo(() => {
