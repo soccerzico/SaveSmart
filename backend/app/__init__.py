@@ -45,6 +45,7 @@ def create_app(config_object: type = Config) -> Flask:
     from .recurring.routes import recurring_bp
     from .plaid.routes import plaid_bp
     from .assistant.routes import assistant_bp
+    from .admin.routes import admin_bp
 
     app.register_blueprint(auth_bp, url_prefix="/api/auth")
     app.register_blueprint(accounts_bp, url_prefix="/api/accounts")
@@ -52,6 +53,8 @@ def create_app(config_object: type = Config) -> Flask:
     app.register_blueprint(recurring_bp, url_prefix="/api/recurring")
     app.register_blueprint(plaid_bp, url_prefix="/api/plaid")
     app.register_blueprint(assistant_bp, url_prefix="/api/assistant")
+    # Dev-only; the route itself 404s when not in debug mode.
+    app.register_blueprint(admin_bp, url_prefix="/api/admin")
 
     # Translate ApiError raised anywhere in a route into a JSON response.
     from .utils import ApiError, error_response
