@@ -43,7 +43,7 @@ def project_goal(goal, net_cents: float, has_recurring: bool, today: date = None
       no_surplus  - expenses >= income, can't make progress
       no_data     - no recurring items entered yet
     """
-    remaining = goal.target_cents - goal.current_cents
+    remaining = goal.target_cents - goal.saved_cents
 
     if remaining <= 0:
         return _result("achieved", today or date.today(), 0, net_cents)

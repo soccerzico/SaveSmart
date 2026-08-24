@@ -191,8 +191,10 @@ def remove_item():
     except ApiException as exc:
         log.warning("Plaid item_remove failed, removing locally: %s", exc.body)
 
-    # Delete the synced accounts for this item, then the item itself.
-    Account.query.filter_by(plaid_item_id=item.id, user_id=user_id).delete()
+    # Delete the synced accounts for this item, then the item itself. Use ORM
+    # deletes (not bulk) so goal_accounts links are cleaned up too.
+    for acct in Account.query.filter_by(plaid_item_id=item.id, user_id=user_id).all():
+        db.session.delete(acct)
     db.session.delete(item)
     db.session.commit()
     log.info("Removed item %s for user=%s", item_id, user_id)

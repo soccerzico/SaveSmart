@@ -177,6 +177,44 @@ h2 {
   margin: 0 0 0.75rem;
 }
 
+/* ---- Goal account picker ---- */
+.account-picker {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 0.6rem 0.8rem;
+  margin: 0;
+}
+.account-picker legend {
+  color: var(--muted);
+  font-size: 0.85rem;
+  padding: 0 0.4rem;
+}
+.check-row {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.3rem 0;
+  color: var(--text);
+  font-size: 0.9rem;
+}
+.check-row input {
+  width: auto;
+}
+.check-row .check-name {
+  flex: 1;
+}
+.picker-total {
+  margin-top: 0.5rem;
+  padding-top: 0.5rem;
+  border-top: 1px solid var(--border);
+  font-size: 0.9rem;
+  color: var(--muted);
+}
+.picker-total strong {
+  color: var(--accent);
+}
+
 /* ---- Progress bar ---- */
 .progress {
   height: 8px;

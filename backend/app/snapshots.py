@@ -32,12 +32,13 @@ def build_snapshot_values(user_id: int) -> dict:
     goals_detail = []
     for g in goals:
         target = g.target_cents or 0
-        pct = round(g.current_cents / target * 100, 1) if target else 0.0
+        saved = g.saved_cents
+        pct = round(saved / target * 100, 1) if target else 0.0
         goals_detail.append(
             {
                 "name": g.name,
                 "target": round(g.target_cents / 100, 2),
-                "current": round(g.current_cents / 100, 2),
+                "current": round(saved / 100, 2),
                 "progress_pct": min(pct, 100.0),
             }
         )

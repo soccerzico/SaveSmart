@@ -12,7 +12,7 @@ from flask_jwt_extended import get_jwt_identity, jwt_required
 
 from ..cashflow import monthly_cashflow, project_goal
 from ..extensions import db
-from ..models import SavingsGoal
+from ..models import Account, SavingsGoal
 from ..utils import ApiError, dollars_to_cents, require_str
 
 goals_bp = Blueprint("goals", __name__)
@@ -21,6 +21,30 @@ log = logging.getLogger("savesmart.goals")
 
 def _current_user_id() -> int:
     return int(get_jwt_identity())
+
+
+def _resolve_accounts(account_ids) -> list:
+    """Validate a list of account ids belong to the user and are assets."""
+    if account_ids is None:
+        return []
+    if not isinstance(account_ids, list):
+        raise ApiError("'account_ids' must be a list of account ids.")
+    if not account_ids:
+        return []
+    accounts = Account.query.filter(
+        Account.id.in_(account_ids), Account.user_id == _current_user_id()
+    ).all()
+    found = {a.id for a in accounts}
+    missing = [i for i in account_ids if i not in found]
+    if missing:
+        raise ApiError(f"Accounts not found: {missing}", status=404)
+    liabilities = [a.name for a in accounts if a.is_liability]
+    if liabilities:
+        raise ApiError(
+            "Liability accounts can't count toward a savings goal: "
+            + ", ".join(liabilities)
+        )
+    return accounts
 
 
 def _serialize(goal: SavingsGoal, cash: dict = None) -> dict:
@@ -76,11 +100,11 @@ def create_goal():
         user_id=_current_user_id(),
         name=require_str(data, "name", max_len=120),
         target_cents=dollars_to_cents(data.get("target_amount"), "target_amount"),
-        current_cents=dollars_to_cents(data.get("current_amount", 0), "current_amount"),
         target_date=_parse_target_date(data.get("target_date")),
     )
     if goal.target_cents <= 0:
         raise ApiError("'target_amount' must be greater than zero.")
+    goal.accounts = _resolve_accounts(data.get("account_ids"))
     db.session.add(goal)
     db.session.commit()
     log.info(
@@ -105,10 +129,8 @@ def update_goal(goal_id: int):
         goal.target_cents = dollars_to_cents(data.get("target_amount"), "target_amount")
         if goal.target_cents <= 0:
             raise ApiError("'target_amount' must be greater than zero.")
-    if "current_amount" in data:
-        goal.current_cents = dollars_to_cents(
-            data.get("current_amount"), "current_amount"
-        )
+    if "account_ids" in data:
+        goal.accounts = _resolve_accounts(data.get("account_ids"))
     if "target_date" in data:
         goal.target_date = _parse_target_date(data.get("target_date"))
 

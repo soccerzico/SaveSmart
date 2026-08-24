@@ -451,7 +451,11 @@ export default function Dashboard() {
 
         {goalForm === "new" && (
           <div className="card">
-            <GoalForm onSubmit={saveGoal} onCancel={() => setGoalForm(null)} />
+            <GoalForm
+              accounts={accounts}
+              onSubmit={saveGoal}
+              onCancel={() => setGoalForm(null)}
+            />
           </div>
         )}
 
@@ -465,6 +469,7 @@ export default function Dashboard() {
               <div className="card" key={goal.id}>
                 <GoalForm
                   initial={goal}
+                  accounts={accounts}
                   onSubmit={saveGoal}
                   onCancel={() => setGoalForm(null)}
                 />
@@ -477,6 +482,15 @@ export default function Dashboard() {
                     <div className="muted small">
                       {money(goal.current_amount)} of {money(goal.target_amount)}
                       {goal.target_date ? ` · target ${goal.target_date}` : ""}
+                    </div>
+                    <div className="muted small">
+                      {goal.linked_account_ids.length > 0
+                        ? "Funded by: " +
+                          goal.linked_account_ids
+                            .map((id) => accounts.find((a) => a.id === id)?.name)
+                            .filter(Boolean)
+                            .join(", ")
+                        : "No accounts linked — edit to select some."}
                     </div>
                   </div>
                   <div className="row-actions">

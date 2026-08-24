@@ -131,6 +131,15 @@ class Account(db.Model):
         }
 
 
+# Which accounts count toward which goals (many-to-many). A goal's progress is
+# the summed balance of its linked asset accounts — no manually-entered amount.
+goal_accounts = db.Table(
+    "goal_accounts",
+    db.Column("goal_id", db.ForeignKey("savings_goals.id"), primary_key=True),
+    db.Column("account_id", db.ForeignKey("accounts.id"), primary_key=True),
+)
+
+
 class SavingsGoal(db.Model):
     __tablename__ = "savings_goals"
 
@@ -140,6 +149,8 @@ class SavingsGoal(db.Model):
     )
     name = db.Column(db.String(120), nullable=False)
     target_cents = db.Column(db.Integer, nullable=False)
+    # Legacy column, no longer authoritative — progress is derived from linked
+    # accounts (see saved_cents). Kept to avoid a destructive migration.
     current_cents = db.Column(db.Integer, nullable=False, default=0)
     target_date = db.Column(db.Date, nullable=True)
     created_at = db.Column(db.DateTime(timezone=True), default=_utcnow, nullable=False)
@@ -147,15 +158,30 @@ class SavingsGoal(db.Model):
         db.DateTime(timezone=True), default=_utcnow, onupdate=_utcnow, nullable=False
     )
 
+    # Accounts whose balances count toward this goal.
+    accounts = db.relationship(
+        "Account",
+        secondary=goal_accounts,
+        lazy="selectin",
+        backref=db.backref("goals", lazy="selectin"),
+    )
+
+    @property
+    def saved_cents(self) -> int:
+        """Progress toward the goal: total balance of linked asset accounts."""
+        return sum(a.balance_cents for a in self.accounts if not a.is_liability)
+
     def to_dict(self) -> dict:
         target = self.target_cents or 0
-        progress = round(self.current_cents / target * 100, 1) if target else 0.0
+        saved = self.saved_cents
+        progress = round(saved / target * 100, 1) if target else 0.0
         return {
             "id": self.id,
             "name": self.name,
             "target_amount": round(self.target_cents / 100, 2),
-            "current_amount": round(self.current_cents / 100, 2),
+            "current_amount": round(saved / 100, 2),
             "progress_pct": min(progress, 100.0),
+            "linked_account_ids": sorted(a.id for a in self.accounts),
             "target_date": self.target_date.isoformat() if self.target_date else None,
             "created_at": self.created_at.isoformat(),
             "updated_at": self.updated_at.isoformat(),
