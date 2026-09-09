@@ -7,11 +7,11 @@ detail rides along as JSON. See the Snapshot model for the storage rationale.
 """
 import json
 import logging
-from datetime import timedelta
+from datetime import datetime, timedelta, timezone
 
 from .cashflow import monthly_cashflow
 from .extensions import db
-from .models import Account, SavingsGoal, Snapshot
+from .models import Account, SavingsGoal, Snapshot, as_utc
 
 log = logging.getLogger("savesmart.snapshots")
 
@@ -64,9 +64,7 @@ def write_snapshot(user_id: int, note: str | None = None, force: bool = False) -
             .first()
         )
         if latest is not None:
-            from datetime import datetime, timezone
-
-            age = datetime.now(timezone.utc) - latest.created_at
+            age = datetime.now(timezone.utc) - as_utc(latest.created_at)
             if age < MIN_INTERVAL:
                 return None
 

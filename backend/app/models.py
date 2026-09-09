@@ -17,6 +17,19 @@ def _utcnow():
     return datetime.now(timezone.utc)
 
 
+def as_utc(value):
+    """Re-attach UTC to a datetime read back from the database.
+
+    SQLite has no timezone-aware datetime type, so DateTime(timezone=True)
+    columns round-trip as naive values even though we always write aware
+    ones. Without this, comparing them to datetime.now(timezone.utc)
+    raises TypeError.
+    """
+    if value is not None and value.tzinfo is None:
+        return value.replace(tzinfo=timezone.utc)
+    return value
+
+
 # Account types we support today. Manual entry only for now; later these map
 # onto whatever an aggregation API (Plaid, etc.) hands us.
 ACCOUNT_TYPES = {
