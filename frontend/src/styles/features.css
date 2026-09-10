@@ -1,0 +1,737 @@
+/* ==========================================================================
+   Feature surfaces — accounts, goals, cashflow, chart, calendar, assistant,
+   and the auth screens. Everything here composes the primitives in ui.css.
+   ========================================================================== */
+
+/* ---- Ledger rows ---------------------------------------------------------
+   The recurring shape across accounts, recurring items and calendar events:
+   an identity glyph, a two-line label, and a right-aligned amount. Keeping
+   one row anatomy is what makes a dense list scannable.
+   -------------------------------------------------------------------------- */
+.ledger {
+  display: flex;
+  flex-direction: column;
+}
+.ledger-row {
+  display: flex;
+  align-items: center;
+  gap: var(--s-3);
+  padding: var(--s-3) var(--s-5);
+  border-bottom: 1px solid var(--border);
+  transition: background-color 0.12s ease;
+}
+.ledger-row:last-child {
+  border-bottom: none;
+}
+.ledger-row:hover {
+  background: var(--surface-2);
+}
+.ledger-row:hover .ledger-actions {
+  opacity: 1;
+}
+
+.ledger-glyph {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border-radius: var(--r-md);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  color: var(--text-secondary);
+  font-size: var(--t-base);
+  font-weight: 650;
+  flex-shrink: 0;
+}
+.ledger-glyph--positive {
+  background: var(--positive-soft);
+  border-color: var(--positive-border);
+  color: var(--positive);
+}
+.ledger-glyph--negative {
+  background: var(--negative-soft);
+  border-color: var(--negative-border);
+  color: var(--negative);
+}
+
+.ledger-main {
+  min-width: 0;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.ledger-title {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  font-size: var(--t-md);
+  font-weight: 550;
+  min-width: 0;
+}
+.ledger-title > span:first-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ledger-meta {
+  font-size: var(--t-sm);
+  color: var(--text-muted);
+}
+
+.ledger-amount {
+  font-size: var(--t-md);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  white-space: nowrap;
+}
+.ledger-actions {
+  display: flex;
+  gap: var(--s-1);
+  flex-shrink: 0;
+  opacity: 0;
+  transition: opacity 0.12s ease;
+}
+.ledger-actions:focus-within {
+  opacity: 1;
+}
+@media (hover: none) {
+  .ledger-actions {
+    opacity: 1;
+  }
+}
+
+/* Group headers inside a grouped account list. */
+.ledger-group {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--s-3);
+  padding: var(--s-2) var(--s-5);
+  background: var(--surface-2);
+  border-bottom: 1px solid var(--border);
+  font-size: var(--t-xs);
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+.ledger-group-total {
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0;
+  text-transform: none;
+  font-size: var(--t-sm);
+  color: var(--text-secondary);
+}
+
+/* ---- Linked institutions -------------------------------------------------- */
+.institutions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-2);
+}
+.institution-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-2);
+  padding: var(--s-1) var(--s-1) var(--s-1) var(--s-3);
+  background: var(--surface-1);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--r-full);
+  font-size: var(--t-base);
+  font-weight: 500;
+  box-shadow: var(--shadow-xs);
+}
+.institution-chip .icon {
+  color: var(--text-muted);
+}
+.institution-date {
+  font-size: var(--t-xs);
+  color: var(--text-muted);
+}
+
+/* ---- Goals ---------------------------------------------------------------- */
+.goal-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-4);
+  padding: var(--s-5);
+}
+.goal-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--s-3);
+}
+.goal-name {
+  font-size: var(--t-md);
+  font-weight: 600;
+}
+.goal-amounts {
+  display: flex;
+  align-items: baseline;
+  gap: var(--s-2);
+  margin-top: 2px;
+}
+.goal-current {
+  font-size: var(--t-xl);
+  font-weight: 650;
+  letter-spacing: -0.02em;
+}
+.goal-target {
+  font-size: var(--t-base);
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+.goal-progress-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-3);
+  font-size: var(--t-sm);
+  color: var(--text-muted);
+}
+.goal-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-3);
+  flex-wrap: wrap;
+  padding-top: var(--s-3);
+  border-top: 1px solid var(--border);
+  font-size: var(--t-sm);
+  color: var(--text-muted);
+}
+.goal-funding {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ---- Cashflow ------------------------------------------------------------- */
+.flow-bar {
+  display: flex;
+  height: 10px;
+  border-radius: var(--r-full);
+  overflow: hidden;
+  background: var(--surface-3);
+  gap: 2px; /* surface gap — the separation is space, not a stroke */
+}
+.flow-bar-seg {
+  height: 100%;
+  transition: width 0.45s cubic-bezier(0.22, 1, 0.36, 1);
+}
+.flow-bar-seg--expense {
+  background: var(--negative);
+}
+.flow-bar-seg--surplus {
+  background: var(--positive);
+}
+.flow-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-4);
+  font-size: var(--t-sm);
+  color: var(--text-muted);
+}
+.legend-key {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-2);
+}
+.legend-swatch {
+  width: 10px;
+  height: 10px;
+  border-radius: 3px;
+  flex-shrink: 0;
+}
+
+/* ---- Chart ---------------------------------------------------------------- */
+.chart {
+  position: relative;
+}
+.chart-plot {
+  position: relative;
+  touch-action: none;
+  outline: none;
+  border-radius: var(--r-md);
+}
+.chart-plot:focus-visible {
+  box-shadow: var(--ring);
+}
+.chart-svg {
+  display: block;
+  width: 100%;
+  height: auto;
+  overflow: visible;
+}
+
+/* Recessive chrome: hairline, solid, one step off the surface. The data is
+   the only thing on this canvas allowed to carry weight. */
+.chart-grid {
+  stroke: var(--viz-grid);
+  stroke-width: 1;
+}
+.chart-zero {
+  stroke: var(--viz-axis);
+  stroke-width: 1;
+}
+.chart-axis-text {
+  fill: var(--text-muted);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+.chart-axis-text.middle {
+  text-anchor: middle;
+}
+.chart-axis-text.end {
+  text-anchor: end;
+}
+/* "Today" is an annotation, not a gridline, and it is solid on purpose: the
+   dashed stroke in this chart already means "forecast". */
+.chart-today {
+  stroke: var(--viz-annotation);
+  stroke-width: 1;
+}
+.chart-today-label {
+  fill: var(--text-muted);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  text-anchor: middle;
+}
+.chart-murky {
+  fill: var(--text-muted);
+  opacity: 0.06;
+}
+.chart-area {
+  fill: var(--viz-line-soft);
+  stroke: none;
+}
+.chart-line {
+  fill: none;
+  stroke: var(--viz-line);
+  stroke-width: 2;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+}
+/* Forecast is dashed as well as dimmer, so past/future survives greyscale
+   and colorblind readers — never colour alone. */
+.chart-line.forecast {
+  stroke-dasharray: 5 4;
+  opacity: 0.8;
+}
+.chart-crosshair {
+  stroke: var(--text-muted);
+  stroke-width: 1;
+  opacity: 0.5;
+}
+.chart-dot {
+  fill: var(--viz-line);
+  stroke: var(--surface-1);
+  stroke-width: 2; /* surface ring keeps the marker legible over the line */
+}
+
+.chart-tip {
+  position: absolute;
+  top: var(--s-2);
+  transform: translateX(var(--s-3));
+  min-width: 10rem;
+  padding: var(--s-3);
+  background: var(--surface-1);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--r-md);
+  box-shadow: var(--shadow-md);
+  pointer-events: none;
+}
+.chart-tip.flip {
+  transform: translateX(-100%) translateX(calc(-1 * var(--s-3)));
+}
+.tip-value {
+  font-size: var(--t-lg);
+  font-weight: 650;
+  letter-spacing: -0.02em;
+}
+.tip-date {
+  font-size: var(--t-sm);
+  color: var(--text-muted);
+}
+.tip-note {
+  margin-top: var(--s-2);
+  padding-top: var(--s-2);
+  border-top: 1px solid var(--border);
+  font-size: var(--t-xs);
+  color: var(--text-muted);
+}
+
+.chart-legend {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--s-4);
+  margin-top: var(--s-4);
+  font-size: var(--t-sm);
+  color: var(--text-muted);
+}
+.legend-line {
+  color: var(--viz-line);
+}
+.legend-swatch--murky {
+  background: var(--text-muted);
+  opacity: 0.25;
+  border-radius: 2px;
+}
+
+.table-scroll {
+  max-height: 320px;
+  overflow: auto;
+  margin-top: var(--s-4);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+}
+
+/* ---- Calendar ------------------------------------------------------------- */
+.cal-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--s-3);
+}
+.cal-nav {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+}
+.cal-title {
+  font-size: var(--t-md);
+  font-weight: 600;
+  min-width: 8.5rem;
+  text-align: center;
+}
+.cal-totals {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-4);
+  font-size: var(--t-sm);
+  font-variant-numeric: tabular-nums;
+}
+.cal-total {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-1);
+  font-weight: 600;
+}
+
+.cal-grid {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 4px;
+  transition: opacity 0.15s ease;
+}
+.cal-grid.is-reloading {
+  opacity: 0.5;
+}
+.cal-dow {
+  padding-bottom: var(--s-1);
+  text-align: center;
+  font-size: var(--t-xs);
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+.cal-cell {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 1px;
+  min-height: 78px;
+  padding: var(--s-2);
+  background: var(--surface-1);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  font-size: var(--t-xs);
+  text-align: left;
+  cursor: pointer;
+  position: relative;
+  transition: border-color 0.12s ease, background-color 0.12s ease;
+}
+.cal-cell:hover {
+  border-color: var(--border-strong);
+  background: var(--surface-2);
+}
+.cal-cell.is-blank {
+  background: transparent;
+  border-color: transparent;
+  min-height: 0;
+  cursor: default;
+}
+.cal-cell.is-today {
+  border-color: var(--brand-400);
+}
+.cal-cell.is-open {
+  border-color: var(--brand-500);
+  box-shadow: var(--ring);
+}
+/* A prediction should not look as solid as a posted transaction. */
+.cal-cell.is-projected {
+  border-style: dashed;
+}
+.cal-cell.is-provisional {
+  border-style: dashed;
+  border-color: var(--border-strong);
+}
+.cal-cell.is-provisional .cal-amt {
+  font-style: italic;
+  opacity: 0.75;
+}
+.cal-daynum {
+  font-size: var(--t-sm);
+  font-weight: 550;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+.cal-cell.is-today .cal-daynum {
+  color: var(--link);
+  font-weight: 700;
+}
+.cal-amt {
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  white-space: nowrap;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.cal-proj {
+  position: absolute;
+  top: var(--s-2);
+  right: var(--s-2);
+  color: var(--text-muted);
+  font-size: 9px;
+}
+.cal-key {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-2) var(--s-4);
+  font-size: var(--t-sm);
+  color: var(--text-muted);
+}
+.cal-key-item {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-1);
+}
+
+/* ---- Assistant chat -------------------------------------------------------- */
+.chat {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+.chat-log {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-3);
+  padding: var(--s-5);
+  height: min(56vh, 560px);
+  overflow-y: auto;
+  scroll-behavior: smooth;
+}
+.chat-empty {
+  margin: auto 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--s-4);
+  text-align: center;
+  padding: var(--s-6) var(--s-4);
+}
+.chat-suggestions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: var(--s-2);
+}
+.bubble {
+  max-width: 78%;
+  padding: var(--s-3) var(--s-4);
+  border-radius: var(--r-lg);
+  font-size: var(--t-md);
+  line-height: 1.55;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.bubble--user {
+  align-self: flex-end;
+  background: var(--brand-600);
+  color: #fff;
+  border-bottom-right-radius: var(--r-xs);
+}
+.bubble--assistant {
+  align-self: flex-start;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-bottom-left-radius: var(--r-xs);
+}
+.bubble--typing {
+  color: var(--text-muted);
+}
+.typing-dots {
+  display: inline-flex;
+  gap: 3px;
+  vertical-align: middle;
+}
+.typing-dots span {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: currentColor;
+  animation: blink 1.2s infinite ease-in-out;
+}
+.typing-dots span:nth-child(2) {
+  animation-delay: 0.18s;
+}
+.typing-dots span:nth-child(3) {
+  animation-delay: 0.36s;
+}
+@keyframes blink {
+  0%,
+  70%,
+  100% {
+    opacity: 0.25;
+  }
+  35% {
+    opacity: 1;
+  }
+}
+.chat-composer {
+  display: flex;
+  gap: var(--s-2);
+  padding: var(--s-3) var(--s-5);
+  border-top: 1px solid var(--border);
+  background: var(--surface-2);
+  border-radius: 0 0 var(--r-lg) var(--r-lg);
+}
+.chat-composer .input {
+  background: var(--surface-1);
+}
+
+/* ---- Auth ----------------------------------------------------------------- */
+.auth {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  min-height: 100vh;
+}
+.auth-panel {
+  display: grid;
+  place-items: center;
+  padding: var(--s-6) var(--s-5);
+}
+.auth-card {
+  width: 100%;
+  max-width: 380px;
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-5);
+}
+.auth-brand {
+  display: flex;
+  align-items: center;
+  gap: var(--s-3);
+}
+.auth-title {
+  font-size: var(--t-xl);
+  font-weight: 650;
+  letter-spacing: -0.02em;
+}
+.auth-sub {
+  font-size: var(--t-md);
+  color: var(--text-muted);
+  margin-top: var(--s-1);
+}
+.auth-foot {
+  font-size: var(--t-base);
+  color: var(--text-muted);
+  text-align: center;
+}
+.auth-legal {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--s-2);
+  font-size: var(--t-sm);
+  color: var(--text-muted);
+}
+
+/* The marketing half: a calm statement of what the product does. Kept
+   typographic — no stock imagery, nothing that competes with the form. */
+.auth-aside {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: var(--s-6);
+  padding: var(--s-9) var(--s-8);
+  background: var(--surface-inverse);
+  color: var(--text-on-inverse);
+}
+.auth-aside-quote {
+  font-size: 1.5rem;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  line-height: 1.35;
+  max-width: 22ch;
+}
+.auth-aside-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-4);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  max-width: 36ch;
+}
+.auth-aside-list li {
+  display: flex;
+  gap: var(--s-3);
+  font-size: var(--t-md);
+  opacity: 0.86;
+}
+.auth-aside-list .icon {
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+@media (max-width: 860px) {
+  .auth {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .auth-aside {
+    display: none;
+  }
+}
+
+@media (max-width: 640px) {
+  .cal-cell {
+    min-height: 60px;
+    padding: var(--s-1);
+  }
+  .cal-amt {
+    font-size: 10px;
+  }
+  .ledger-row {
+    padding: var(--s-3) var(--s-4);
+  }
+  .bubble {
+    max-width: 88%;
+  }
+  .chat-log,
+  .chat-composer {
+    padding-left: var(--s-4);
+    padding-right: var(--s-4);
+  }
+}

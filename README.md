@@ -33,11 +33,34 @@ SaveSmart/
 └── frontend/
     ├── src/
     │   ├── api/client.js       # fetch wrapper w/ JWT
-    │   ├── context/AuthContext.jsx
-    │   ├── components/         # AccountForm, GoalForm
-    │   └── pages/              # Login, Register, Dashboard
+    │   ├── lib/format.js       # money / date formatting used app-wide
+    │   ├── styles/             # tokens, base, layout, ui, features
+    │   ├── context/            # Auth, Theme, Finance (shared data layer)
+    │   ├── components/ui/      # design-system kit (Button, Card, Modal, …)
+    │   ├── components/layout/  # AppShell, Page, AuthLayout
+    │   ├── components/         # feature components + entity forms
+    │   └── pages/              # one file per route
     └── vite.config.js          # proxies /api -> :5000
 ```
+
+### Frontend design system
+
+The UI is a small in-house component kit — no CSS framework, no UI dependency.
+
+- **`src/styles/tokens.css`** is the single source of truth for colour, type,
+  space, radius and elevation. Components are written against roles
+  (`--text-secondary`, `--surface-1`), never raw hex, so light/dark swaps in one
+  place. Every text role clears WCAG AA against both the card and the page
+  plane in its own mode.
+- **Colour means state.** The brand indigo is for navigation, primary actions
+  and the single-series net-worth line; green/red/amber are reserved for
+  financial state, and never used decoratively. Every state that carries colour
+  also carries a glyph or a word, so nothing is colour-alone.
+- **Theme** is `system | light | dark`, persisted in `localStorage` and stamped
+  on `<html data-theme>`; `system` stamps nothing and lets the media query win.
+- **Data** for accounts/goals/recurring/Plaid lives in `FinanceContext`, so one
+  `refresh()` keeps every route consistent.
+
 
 ## Running it locally
 

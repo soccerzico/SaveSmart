@@ -1,39 +1,29 @@
 import { useMemo, useRef, useState } from "react";
+import { Button, Money } from "./ui";
+import {
+  formatDateLong,
+  formatDateShort,
+  money,
+  moneyCompact,
+} from "../lib/format.js";
 
-// One continuous net-worth line: reconstructed past (solid) meeting forecast
-// (dashed) at today. Hand-rolled SVG rather than a charting dependency — the
-// interaction here is one crosshair, and the app ships no chart library.
+// One continuous net-worth line: reconstructed past (solid, with a soft area
+// wash beneath it) meeting forecast (dashed) at today. Hand-rolled SVG rather
+// than a charting dependency — the interaction here is one crosshair, and the
+// app ships no chart library.
 //
-// The two halves are distinguished by line style as well as color, so the
-// past/future split survives a colorblind reader or a greyscale print.
+// Design notes:
+//  * The line wears the brand hue, not green. In this app green and red mean
+//    "money went up / down"; a net-worth line that is permanently green would
+//    spend that meaning on nothing.
+//  * Past and future are separated by line *style* as well as tone, so the
+//    split survives a colorblind reader or a greyscale print.
+//  * Chrome is hairline and solid. The one dashed stroke on the canvas means
+//    forecast, so the "today" marker is a solid annotation rule instead.
 
-const VB_W = 860;
+const VB_W = 880;
 const VB_H = 300;
-const PAD = { top: 18, right: 16, bottom: 28, left: 62 };
-
-const money = (n) =>
-  n.toLocaleString("en-US", { style: "currency", currency: "USD" });
-
-const compact = (n) => {
-  const abs = Math.abs(n);
-  if (abs >= 1000000) return `$${(n / 1000000).toFixed(1)}M`;
-  if (abs >= 1000) return `$${Math.round(n / 1000)}k`;
-  return `$${Math.round(n)}`;
-};
-
-const shortDate = (iso) =>
-  new Date(`${iso}T00:00:00`).toLocaleDateString("en-US", {
-    month: "short",
-    day: "numeric",
-  });
-
-const longDate = (iso) =>
-  new Date(`${iso}T00:00:00`).toLocaleDateString("en-US", {
-    weekday: "short",
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-  });
+const PAD = { top: 22, right: 18, bottom: 30, left: 64 };
 
 export default function BalanceChart({ series, today }) {
   const wrapRef = useRef(null);
@@ -61,12 +51,20 @@ export default function BalanceChart({ series, today }) {
 
     const plotW = VB_W - PAD.left - PAD.right;
     const plotH = VB_H - PAD.top - PAD.bottom;
+    const baseY = PAD.top + plotH;
     const x = (i) =>
-      PAD.left + (series.length === 1 ? plotW / 2 : (i / (series.length - 1)) * plotW);
+      PAD.left +
+      (series.length === 1 ? plotW / 2 : (i / (series.length - 1)) * plotW);
     const y = (v) => PAD.top + plotH - ((v - lo) / (hi - lo)) * plotH;
 
     const line = (pts) =>
       pts.map((p, k) => `${k === 0 ? "M" : "L"}${x(p.i)},${y(p.v)}`).join(" ");
+    // The wash under the actual line is closed to the plot floor, never to
+    // the zero line — it reads as "the shape of the past", not as a value.
+    const area = (pts) =>
+      pts.length < 2
+        ? ""
+        : `${line(pts)} L${x(pts[pts.length - 1].i)},${baseY} L${x(pts[0].i)},${baseY} Z`;
 
     const actual = [];
     const forecast = [];
@@ -77,9 +75,10 @@ export default function BalanceChart({ series, today }) {
     });
     // Bridge the seam: the forecast starts from the last real point so the
     // line is continuous instead of jumping a day.
-    const bridged = actual.length && forecast.length
-      ? [actual[actual.length - 1], ...forecast]
-      : forecast;
+    const bridged =
+      actual.length && forecast.length
+        ? [actual[actual.length - 1], ...forecast]
+        : forecast;
 
     // Y gridlines on rounded values.
     const ticks = [];
@@ -109,18 +108,32 @@ export default function BalanceChart({ series, today }) {
     });
     if (run !== null) murky.push([run, series.length - 1]);
 
-    return { lo, hi, x, y, line, actual, bridged, ticks, xLabels, todayIndex, murky };
+    return {
+      lo,
+      hi,
+      x,
+      y,
+      line,
+      area,
+      actual,
+      bridged,
+      ticks,
+      xLabels,
+      todayIndex,
+      murky,
+    };
   }, [series, today]);
 
   if (!geom) {
     return (
-      <p className="muted">
+      <p className="u-muted u-base">
         No balance history yet — sync your accounts to build the timeline.
       </p>
     );
   }
 
-  const { x, y, line, actual, bridged, ticks, xLabels, todayIndex, murky } = geom;
+  const { x, y, line, area, actual, bridged, ticks, xLabels, todayIndex, murky } =
+    geom;
 
   // Map a pointer position onto the nearest data index. The reader aims at a
   // date, never at a 2px line, so the whole plot is the hit target.
@@ -137,7 +150,8 @@ export default function BalanceChart({ series, today }) {
   function onKeyDown(e) {
     if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
     e.preventDefault();
-    const start = hover ?? todayIndex >= 0 ? hover ?? todayIndex : 0;
+    // Arrowing in from an unhovered chart starts at today when we know it.
+    const start = hover ?? (todayIndex >= 0 ? todayIndex : 0);
     const next = start + (e.key === "ArrowRight" ? 1 : -1);
     setHover(Math.max(0, Math.min(series.length - 1, next)));
   }
@@ -148,7 +162,7 @@ export default function BalanceChart({ series, today }) {
   const tipFlip = tipLeftPct > 62;
 
   return (
-    <div className="chart-wrap">
+    <div className="chart">
       <div
         className="chart-plot"
         ref={wrapRef}
@@ -157,9 +171,9 @@ export default function BalanceChart({ series, today }) {
         onKeyDown={onKeyDown}
         tabIndex={0}
         role="img"
-        aria-label={`Net worth from ${longDate(series[0].date)} to ${longDate(
-          series[series.length - 1].date
-        )}`}
+        aria-label={`Net worth from ${formatDateLong(
+          series[0].date
+        )} to ${formatDateLong(series[series.length - 1].date)}. Use arrow keys to read values.`}
       >
         <svg viewBox={`0 0 ${VB_W} ${VB_H}`} className="chart-svg">
           {/* Low-confidence stretches: mostly carried-forward, not evidenced. */}
@@ -183,8 +197,8 @@ export default function BalanceChart({ series, today }) {
                 y2={y(t)}
                 className="chart-grid"
               />
-              <text x={PAD.left - 10} y={y(t) + 4} className="chart-axis-text end">
-                {compact(t)}
+              <text x={PAD.left - 12} y={y(t) + 4} className="chart-axis-text end">
+                {moneyCompact(t)}
               </text>
             </g>
           ))}
@@ -204,12 +218,14 @@ export default function BalanceChart({ series, today }) {
             <text
               key={`x${i}`}
               x={x(i)}
-              y={VB_H - 8}
+              y={VB_H - 10}
               className="chart-axis-text middle"
             >
-              {shortDate(date)}
+              {formatDateShort(date)}
             </text>
           ))}
+
+          {actual.length > 1 && <path d={area(actual)} className="chart-area" />}
 
           {todayIndex >= 0 && (
             <>
@@ -222,10 +238,10 @@ export default function BalanceChart({ series, today }) {
               />
               <text
                 x={x(todayIndex)}
-                y={PAD.top - 6}
-                className="chart-axis-text middle"
+                y={PAD.top - 8}
+                className="chart-today-label"
               >
-                today
+                Today
               </text>
             </>
           )}
@@ -248,7 +264,7 @@ export default function BalanceChart({ series, today }) {
                 cx={x(hover)}
                 cy={y(active.net_worth)}
                 r="5"
-                className={`chart-dot ${active.actual ? "" : "forecast"}`}
+                className="chart-dot"
               />
             </>
           )}
@@ -256,12 +272,14 @@ export default function BalanceChart({ series, today }) {
 
         {active && (
           <div
-            className={`chart-tip ${tipFlip ? "flip" : ""}`}
+            className={`chart-tip ${tipFlip ? "flip" : ""}`.trim()}
             style={{ left: `${tipLeftPct}%` }}
           >
-            <div className="tip-value">{money(active.net_worth)}</div>
-            <div className="tip-date">{longDate(active.date)}</div>
-            <div className={`tip-kind ${active.actual ? "past" : "future"}`}>
+            <div className="tip-value">
+              <Money value={active.net_worth} tabular={false} />
+            </div>
+            <div className="tip-date">
+              {formatDateLong(active.date)} ·{" "}
               {active.actual ? "actual" : "forecast"}
             </div>
             {active.actual && active.carried_flat > 0 && (
@@ -276,50 +294,64 @@ export default function BalanceChart({ series, today }) {
       </div>
 
       <div className="chart-legend">
-        <span className="lg">
-          <svg width="22" height="8" aria-hidden="true">
+        <span className="legend-key">
+          <svg width="22" height="8" aria-hidden="true" className="legend-line">
             <line x1="0" y1="4" x2="22" y2="4" className="chart-line" />
           </svg>
           Actual (reconstructed)
         </span>
-        <span className="lg">
-          <svg width="22" height="8" aria-hidden="true">
+        <span className="legend-key">
+          <svg width="22" height="8" aria-hidden="true" className="legend-line">
             <line x1="0" y1="4" x2="22" y2="4" className="chart-line forecast" />
           </svg>
           Forecast
         </span>
-        <span className="lg">
-          <span className="lg-swatch murky" aria-hidden="true" />
+        <span className="legend-key">
+          <span
+            className="legend-swatch legend-swatch--murky"
+            aria-hidden="true"
+          />
           Low confidence
         </span>
-        <button className="ghost small" onClick={() => setShowTable((s) => !s)}>
+        <span className="spacer" />
+        <Button
+          variant="ghost"
+          size="sm"
+          icon="table"
+          onClick={() => setShowTable((s) => !s)}
+          aria-expanded={showTable}
+        >
           {showTable ? "Hide data" : "View as table"}
-        </button>
+        </Button>
       </div>
 
       {showTable && (
         <div className="table-scroll">
-          <table className="data-table">
-            <caption className="muted small">
+          <table className="table">
+            <caption>
               Net worth by day. Every value the tooltip shows is listed here.
             </caption>
             <thead>
               <tr>
                 <th scope="col">Date</th>
-                <th scope="col">Net worth</th>
+                <th scope="col" className="num">
+                  Net worth
+                </th>
                 <th scope="col">Kind</th>
-                <th scope="col">Evidenced</th>
+                <th scope="col" className="num">
+                  Evidenced
+                </th>
               </tr>
             </thead>
             <tbody>
               {series.map((p) => (
                 <tr key={p.date}>
-                  <td>{longDate(p.date)}</td>
-                  <td className={p.net_worth < 0 ? "negative" : ""}>
-                    {money(p.net_worth)}
+                  <td>{formatDateLong(p.date)}</td>
+                  <td className="num">
+                    <Money value={p.net_worth} tone={p.net_worth < 0 ? "negative" : "none"} />
                   </td>
-                  <td>{p.actual ? "actual" : "forecast"}</td>
-                  <td>
+                  <td>{p.actual ? "Actual" : "Forecast"}</td>
+                  <td className="num">
                     {p.actual && p.confidence != null
                       ? `${Math.round(p.confidence * 100)}%`
                       : "—"}

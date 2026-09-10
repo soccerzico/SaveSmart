@@ -1,13 +1,13 @@
 import { useState } from "react";
+import { Alert, Button, MoneyInput, Input, Select } from "./ui";
+import { ACCOUNT_TYPE_LABELS, ACCOUNT_TYPE_ORDER } from "../lib/format.js";
 
-const ACCOUNT_TYPES = [
-  { value: "checking", label: "Checking" },
-  { value: "savings", label: "Savings" },
-  { value: "credit_card", label: "Credit Card" },
-  { value: "investment", label: "Investment" },
-  { value: "loan", label: "Loan" },
-  { value: "cash", label: "Cash" },
-];
+const ACCOUNT_TYPES = ACCOUNT_TYPE_ORDER.map((value) => ({
+  value,
+  label: ACCOUNT_TYPE_LABELS[value],
+}));
+
+const LIABILITY_TYPES = new Set(["credit_card", "loan"]);
 
 // Used for both create and edit. `initial` pre-fills the form when editing;
 // onSubmit receives the payload and should return a promise.
@@ -17,9 +17,7 @@ export default function AccountForm({ initial, onSubmit, onCancel }) {
     initial?.account_type ?? "checking"
   );
   const [institution, setInstitution] = useState(initial?.institution ?? "");
-  const [balance, setBalance] = useState(
-    initial ? String(initial.balance) : ""
-  );
+  const [balance, setBalance] = useState(initial ? String(initial.balance) : "");
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
 
@@ -42,54 +40,54 @@ export default function AccountForm({ initial, onSubmit, onCancel }) {
   }
 
   return (
-    <form className="inline-form" onSubmit={handleSubmit}>
-      {error && <p className="error">{error}</p>}
-      <div className="form-row">
-        <label>
-          Name
-          <input value={name} onChange={(e) => setName(e.target.value)} required />
-        </label>
-        <label>
-          Type
-          <select
-            value={accountType}
-            onChange={(e) => setAccountType(e.target.value)}
-          >
-            {ACCOUNT_TYPES.map((t) => (
-              <option key={t.value} value={t.value}>
-                {t.label}
-              </option>
-            ))}
-          </select>
-        </label>
+    <form className="form-stack" onSubmit={handleSubmit}>
+      {error && <Alert tone="error">{error}</Alert>}
+
+      <div className="form-grid">
+        <Input
+          label="Account name"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          placeholder="Everyday checking"
+          required
+          autoFocus
+        />
+        <Select
+          label="Type"
+          value={accountType}
+          onChange={(e) => setAccountType(e.target.value)}
+          options={ACCOUNT_TYPES}
+        />
       </div>
-      <div className="form-row">
-        <label>
-          Institution
-          <input
-            value={institution}
-            onChange={(e) => setInstitution(e.target.value)}
-            placeholder="optional"
-          />
-        </label>
-        <label>
-          Balance ($)
-          <input
-            type="number"
-            step="0.01"
-            value={balance}
-            onChange={(e) => setBalance(e.target.value)}
-            required
-          />
-        </label>
+
+      <div className="form-grid">
+        <Input
+          label="Institution"
+          value={institution}
+          onChange={(e) => setInstitution(e.target.value)}
+          placeholder="Optional"
+        />
+        <MoneyInput
+          label="Current balance"
+          value={balance}
+          onChange={(e) => setBalance(e.target.value)}
+          placeholder="0.00"
+          required
+          hint={
+            LIABILITY_TYPES.has(accountType)
+              ? "Enter what you owe as a positive number — it counts against net worth."
+              : undefined
+          }
+        />
       </div>
+
       <div className="form-actions">
-        <button type="submit" disabled={saving}>
-          {saving ? "Saving…" : "Save"}
-        </button>
-        <button type="button" className="ghost" onClick={onCancel}>
+        <Button variant="ghost" onClick={onCancel}>
           Cancel
-        </button>
+        </Button>
+        <Button type="submit" variant="primary" loading={saving}>
+          {initial ? "Save changes" : "Add account"}
+        </Button>
       </div>
     </form>
   );

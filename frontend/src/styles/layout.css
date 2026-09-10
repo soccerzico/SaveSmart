@@ -1,0 +1,309 @@
+/* ==========================================================================
+   App shell & page scaffolding
+   --------------------------------------------------------------------------
+   Desktop gets a persistent left rail: navigation should be a place you can
+   look, not a menu you have to open. Below 960px the rail becomes a slide-in
+   drawer behind a top bar, which is the same navigation tree, not a reduced
+   one.
+   ========================================================================== */
+
+.shell {
+  display: grid;
+  grid-template-columns: var(--sidebar-w) minmax(0, 1fr);
+  min-height: 100vh;
+}
+
+/* ---- Sidebar ------------------------------------------------------------- */
+.sidebar {
+  position: sticky;
+  top: 0;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-2);
+  padding: var(--s-4) var(--s-3);
+  background: var(--surface-1);
+  border-right: 1px solid var(--border);
+  z-index: var(--z-drawer);
+}
+
+.sidebar-brand {
+  display: flex;
+  align-items: center;
+  gap: var(--s-3);
+  padding: var(--s-2) var(--s-3);
+  margin-bottom: var(--s-2);
+  color: var(--text-primary);
+  text-decoration: none;
+}
+.sidebar-brand:hover {
+  text-decoration: none;
+}
+.brand-mark {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border-radius: var(--r-md);
+  background: var(--brand-600);
+  color: #fff;
+  flex-shrink: 0;
+}
+.brand-word {
+  font-size: var(--t-lg);
+  font-weight: 650;
+  letter-spacing: -0.02em;
+}
+
+.nav {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.nav-section {
+  padding: var(--s-4) var(--s-3) var(--s-2);
+}
+.nav-item {
+  display: flex;
+  align-items: center;
+  gap: var(--s-3);
+  padding: var(--s-2) var(--s-3);
+  border-radius: var(--r-md);
+  color: var(--text-secondary);
+  font-size: var(--t-md);
+  font-weight: 500;
+  text-decoration: none;
+  transition: background-color 0.12s ease, color 0.12s ease;
+}
+.nav-item:hover {
+  background: var(--surface-3);
+  color: var(--text-primary);
+  text-decoration: none;
+}
+.nav-item .icon {
+  color: var(--text-muted);
+  transition: color 0.12s ease;
+}
+.nav-item:hover .icon {
+  color: var(--text-secondary);
+}
+.nav-item.is-active {
+  background: var(--info-soft);
+  color: var(--link);
+  font-weight: 600;
+}
+.nav-item.is-active .icon {
+  color: var(--link);
+}
+.nav-item-badge {
+  margin-left: auto;
+}
+
+.sidebar-foot {
+  margin-top: auto;
+  padding-top: var(--s-3);
+  border-top: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-2);
+}
+.user-chip {
+  display: flex;
+  align-items: center;
+  gap: var(--s-3);
+  padding: var(--s-2) var(--s-3);
+  min-width: 0;
+}
+.avatar {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border-radius: var(--r-full);
+  background: var(--surface-3);
+  border: 1px solid var(--border);
+  color: var(--text-secondary);
+  font-size: var(--t-sm);
+  font-weight: 650;
+  text-transform: uppercase;
+  flex-shrink: 0;
+}
+.user-chip-text {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  line-height: 1.25;
+}
+.user-chip-email {
+  font-size: var(--t-base);
+  font-weight: 550;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.user-chip-meta {
+  font-size: var(--t-xs);
+  color: var(--text-muted);
+}
+
+/* ---- Main column --------------------------------------------------------- */
+.main {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.page {
+  width: 100%;
+  max-width: var(--content-max);
+  margin: 0 auto;
+  padding: var(--s-6) var(--s-6) var(--s-9);
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-5);
+}
+
+.page-header {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--s-4);
+  flex-wrap: wrap;
+}
+.page-heading {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-1);
+  min-width: 0;
+}
+.page-title {
+  font-size: var(--t-xl);
+  font-weight: 650;
+  letter-spacing: -0.02em;
+}
+.page-subtitle {
+  font-size: var(--t-md);
+  color: var(--text-muted);
+}
+.page-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  flex-wrap: wrap;
+}
+
+/* ---- Mobile top bar + drawer --------------------------------------------- */
+.topbar {
+  display: none;
+  position: sticky;
+  top: 0;
+  z-index: var(--z-sticky);
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-3);
+  height: var(--topbar-h);
+  padding: 0 var(--s-4);
+  background: var(--surface-1);
+  border-bottom: 1px solid var(--border);
+}
+.scrim {
+  display: none;
+  position: fixed;
+  inset: 0;
+  z-index: calc(var(--z-drawer) - 1);
+  background: rgba(15, 23, 42, 0.45);
+  backdrop-filter: blur(2px);
+  animation: fade-in 0.16s ease;
+  border: none;
+}
+
+/* ---- Grids --------------------------------------------------------------- */
+.grid {
+  display: grid;
+  gap: var(--s-4);
+}
+.grid--stats {
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+}
+/* Two-up cards size to their own content rather than stretching to match the
+   tallest — a half-empty card reads as something failing to load. */
+.grid--2 {
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  align-items: start;
+}
+.grid--cards {
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+}
+.split {
+  display: grid;
+  grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr);
+  gap: var(--s-4);
+  align-items: start;
+}
+
+.stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-4);
+}
+.stack--tight {
+  gap: var(--s-2);
+}
+.row {
+  display: flex;
+  align-items: center;
+  gap: var(--s-3);
+  flex-wrap: wrap;
+}
+.row--between {
+  justify-content: space-between;
+}
+.spacer {
+  flex: 1;
+}
+
+/* ---- Centered states ----------------------------------------------------- */
+.centered {
+  display: grid;
+  place-items: center;
+  min-height: 100vh;
+  gap: var(--s-3);
+  color: var(--text-muted);
+}
+
+@media (max-width: 960px) {
+  .shell {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .topbar {
+    display: flex;
+  }
+  .sidebar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 260px;
+    transform: translateX(-100%);
+    transition: transform 0.22s cubic-bezier(0.22, 1, 0.36, 1);
+    box-shadow: var(--shadow-lg);
+  }
+  .sidebar.is-open {
+    transform: translateX(0);
+  }
+  .sidebar.is-open + .scrim,
+  .scrim.is-open {
+    display: block;
+  }
+  .split {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .page {
+    padding: var(--s-5) var(--s-4) var(--s-8);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sidebar {
+    transition: none;
+  }
+}

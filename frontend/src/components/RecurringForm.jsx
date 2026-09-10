@@ -1,11 +1,15 @@
 import { useState } from "react";
+import { Alert, Button, Input, MoneyInput, Select } from "./ui";
+import { FREQUENCY_LABELS } from "../lib/format.js";
 
-const FREQUENCIES = [
-  { value: "weekly", label: "Weekly" },
-  { value: "biweekly", label: "Every 2 weeks" },
-  { value: "monthly", label: "Monthly" },
-  { value: "quarterly", label: "Quarterly" },
-  { value: "annually", label: "Annually" },
+const FREQUENCIES = Object.entries(FREQUENCY_LABELS).map(([value, label]) => ({
+  value,
+  label,
+}));
+
+const DIRECTIONS = [
+  { value: "income", label: "Income" },
+  { value: "expense", label: "Expense" },
 ];
 
 // Used for both create and edit of a recurring income/expense item.
@@ -36,62 +40,51 @@ export default function RecurringForm({ initial, onSubmit, onCancel }) {
   }
 
   return (
-    <form className="inline-form" onSubmit={handleSubmit}>
-      {error && <p className="error">{error}</p>}
-      <div className="form-row">
-        <label>
-          Name
-          <input
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            placeholder="Salary, Rent, …"
-            required
-          />
-        </label>
-        <label>
-          Type
-          <select
-            value={direction}
-            onChange={(e) => setDirection(e.target.value)}
-          >
-            <option value="income">Income</option>
-            <option value="expense">Expense</option>
-          </select>
-        </label>
+    <form className="form-stack" onSubmit={handleSubmit}>
+      {error && <Alert tone="error">{error}</Alert>}
+
+      <div className="form-grid">
+        <Input
+          label="Name"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          placeholder="Salary, Rent, …"
+          required
+          autoFocus
+        />
+        <Select
+          label="Direction"
+          value={direction}
+          onChange={(e) => setDirection(e.target.value)}
+          options={DIRECTIONS}
+        />
       </div>
-      <div className="form-row">
-        <label>
-          Amount ($)
-          <input
-            type="number"
-            step="0.01"
-            min="0.01"
-            value={amount}
-            onChange={(e) => setAmount(e.target.value)}
-            required
-          />
-        </label>
-        <label>
-          Frequency
-          <select
-            value={frequency}
-            onChange={(e) => setFrequency(e.target.value)}
-          >
-            {FREQUENCIES.map((f) => (
-              <option key={f.value} value={f.value}>
-                {f.label}
-              </option>
-            ))}
-          </select>
-        </label>
+
+      <div className="form-grid">
+        <MoneyInput
+          label="Amount"
+          min="0.01"
+          value={amount}
+          onChange={(e) => setAmount(e.target.value)}
+          placeholder="0.00"
+          required
+        />
+        <Select
+          label="Frequency"
+          value={frequency}
+          onChange={(e) => setFrequency(e.target.value)}
+          options={FREQUENCIES}
+          hint="Converted to a monthly figure for cashflow."
+        />
       </div>
+
       <div className="form-actions">
-        <button type="submit" disabled={saving}>
-          {saving ? "Saving…" : "Save"}
-        </button>
-        <button type="button" className="ghost" onClick={onCancel}>
+        <Button variant="ghost" onClick={onCancel}>
           Cancel
-        </button>
+        </Button>
+        <Button type="submit" variant="primary" loading={saving}>
+          {initial ? "Save changes" : "Add item"}
+        </Button>
       </div>
     </form>
   );

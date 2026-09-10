@@ -1,6 +1,15 @@
 import { useEffect, useRef, useState } from "react";
-import { Link } from "react-router-dom";
 import { api } from "../api/client";
+import { Page, PageHeader } from "../components/layout/Page.jsx";
+import {
+  Alert,
+  Badge,
+  Button,
+  Card,
+  CardBody,
+  EmptyState,
+  Icon,
+} from "../components/ui";
 
 const SUGGESTIONS = [
   "How am I doing on my goals?",
@@ -15,6 +24,7 @@ export default function Assistant() {
   const [sending, setSending] = useState(false);
   const [error, setError] = useState("");
   const scrollRef = useRef(null);
+  const inputRef = useRef(null);
 
   useEffect(() => {
     api
@@ -46,88 +56,115 @@ export default function Assistant() {
       setInput(content);
     } finally {
       setSending(false);
+      inputRef.current?.focus();
     }
   }
 
   return (
-    <div className="app">
-      <header className="topbar">
-        <h1 className="brand">SaveSmart</h1>
-        <nav className="topbar-right">
-          <Link className="navlink" to="/">
-            ← Dashboard
-          </Link>
-        </nav>
-      </header>
+    <Page>
+      <PageHeader
+        title="Assistant"
+        subtitle="Reads your balances, goals and snapshot history — it never changes them"
+        actions={
+          <Badge tone="brand" icon="sparkles">
+            Claude Haiku
+          </Badge>
+        }
+      />
 
-      <section className="container">
-        <div className="section-head">
-          <h2>Assistant</h2>
-          <span className="muted small">Claude Haiku · reads your snapshots</span>
-        </div>
+      {configured === false && (
+        <Alert tone="warning" title="Assistant not configured">
+          Add <code>ANTHROPIC_API_KEY</code> to <code>backend/.env</code> and
+          restart the backend to enable chat.
+        </Alert>
+      )}
 
-        {configured === false && (
-          <div className="callout">
-            <strong>Assistant not configured.</strong>
-            <p className="muted small">
-              Add <code>ANTHROPIC_API_KEY</code> to <code>backend/.env</code> and
-              restart the backend to enable chat.
-            </p>
-          </div>
-        )}
-
-        {configured && (
-          <div className="chat card">
-            <div className="chat-log" ref={scrollRef}>
-              {messages.length === 0 && (
-                <div className="chat-empty">
-                  <p className="muted">
-                    Ask about your goals, balances, or progress over time.
-                  </p>
-                  <div className="chips">
-                    {SUGGESTIONS.map((s) => (
-                      <button
-                        key={s}
-                        className="chip"
-                        onClick={() => send(s)}
-                        disabled={sending}
-                      >
-                        {s}
-                      </button>
-                    ))}
-                  </div>
+      {configured && (
+        <Card className="chat card--flush">
+          <div className="chat-log" ref={scrollRef}>
+            {messages.length === 0 ? (
+              <div className="chat-empty">
+                <EmptyState icon="sparkles" title="Ask about your money">
+                  Goals, balances, cashflow, or how any of it has moved since
+                  your first snapshot.
+                </EmptyState>
+                <div className="chat-suggestions">
+                  {SUGGESTIONS.map((s) => (
+                    <Button
+                      key={s}
+                      size="sm"
+                      onClick={() => send(s)}
+                      disabled={sending}
+                    >
+                      {s}
+                    </Button>
+                  ))}
                 </div>
-              )}
-              {messages.map((m, i) => (
-                <div key={i} className={`bubble ${m.role}`}>
+              </div>
+            ) : (
+              messages.map((m, i) => (
+                <div key={i} className={`bubble bubble--${m.role}`}>
                   {m.content}
                 </div>
-              ))}
-              {sending && <div className="bubble assistant typing">Thinking…</div>}
-            </div>
-
-            {error && <p className="error small">{error}</p>}
-
-            <form
-              className="chat-input"
-              onSubmit={(e) => {
-                e.preventDefault();
-                send();
-              }}
-            >
-              <input
-                value={input}
-                onChange={(e) => setInput(e.target.value)}
-                placeholder="Ask about your finances…"
-                disabled={sending}
-              />
-              <button type="submit" disabled={sending || !input.trim()}>
-                Send
-              </button>
-            </form>
+              ))
+            )}
+            {sending && (
+              <div className="bubble bubble--assistant bubble--typing">
+                <span className="typing-dots" aria-hidden="true">
+                  <span />
+                  <span />
+                  <span />
+                </span>
+                <span className="sr-only">Assistant is typing</span>
+              </div>
+            )}
           </div>
-        )}
-      </section>
-    </div>
+
+          {error && (
+            <CardBody tight>
+              <Alert tone="error">{error}</Alert>
+            </CardBody>
+          )}
+
+          <form
+            className="chat-composer"
+            onSubmit={(e) => {
+              e.preventDefault();
+              send();
+            }}
+          >
+            <label className="sr-only" htmlFor="assistant-input">
+              Message the assistant
+            </label>
+            <input
+              id="assistant-input"
+              className="input"
+              ref={inputRef}
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              placeholder="Ask about your finances…"
+              disabled={sending}
+              autoComplete="off"
+            />
+            <Button
+              type="submit"
+              variant="primary"
+              icon="send"
+              disabled={sending || !input.trim()}
+            >
+              Send
+            </Button>
+          </form>
+        </Card>
+      )}
+
+      {configured && (
+        <p className="u-sm u-muted row" style={{ gap: "var(--s-2)" }}>
+          <Icon name="shield" size={14} />
+          Your figures are sent to Anthropic to answer each question. Nothing is
+          written back to your accounts.
+        </p>
+      )}
+    </Page>
   );
 }

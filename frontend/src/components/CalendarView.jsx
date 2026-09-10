@@ -1,5 +1,16 @@
 import { useEffect, useMemo, useState } from "react";
 import { api } from "../api/client";
+import {
+  Alert,
+  Button,
+  Card,
+  CardBody,
+  CardHeader,
+  Icon,
+  Money,
+  Skeleton,
+} from "./ui";
+import { money } from "../lib/format.js";
 
 // Month grid of money in and out. Past days show what actually happened
 // (real transactions); today onward shows what recurring items predict.
@@ -11,11 +22,8 @@ import { api } from "../api/client";
 //
 // Green/red sits at deltaE 7.9 under deuteranopia — indistinguishable on hue
 // for a red-green colorblind reader — and a third state can't be carried by
-// color at all. So every amount also wears a glyph (+ / - / arrows) and the
-// cell says its direction in text. Color is the accent, never the message.
-
-const money = (n) =>
-  n.toLocaleString("en-US", { style: "currency", currency: "USD" });
+// color at all. So every amount also wears a glyph (+ / − / ⇄) and the cell
+// says its direction in text. Color is the accent, never the message.
 
 const MONTHS = [
   "January", "February", "March", "April", "May", "June",
@@ -92,153 +100,236 @@ export default function CalendarView() {
     },
     { in: 0, out: 0, moved: 0 }
   );
+  const net = totals.in - totals.out;
 
   const selected = openDay ? byDate.get(openDay) : null;
 
   return (
-    <div className="cal">
-      <div className="cal-head">
-        <div className="cal-nav">
-          <button className="ghost small" onClick={() => shift(-1)}>
-            ‹ Prev
-          </button>
-          <h3 className="cal-title">
-            {MONTHS[month - 1]} {year}
-          </h3>
-          <button className="ghost small" onClick={() => shift(1)}>
-            Next ›
-          </button>
-        </div>
-        <div className="cal-totals">
-          <span className="pos">+{money(totals.in)} in</span>
-          <span className="neg">−{money(totals.out)} out</span>
-          {totals.moved > 0 && (
-            <span className="moved">⇄ {money(totals.moved)} moved</span>
-          )}
-          <span className={totals.in - totals.out >= 0 ? "pos" : "neg"}>
-            {totals.in - totals.out >= 0 ? "+" : "−"}
-            {money(Math.abs(totals.in - totals.out))} net
-          </span>
-        </div>
-      </div>
-
-      {error && <p className="error">{error}</p>}
-
-      <div className={`cal-grid ${loading ? "reloading" : ""}`}>
-        {DOW.map((d) => (
-          <div className="cal-dow" key={d}>
-            {d}
+    <div className="stack">
+      <Card>
+        <CardHeader>
+          <div className="cal-nav">
+            <Button
+              variant="ghost"
+              size="sm"
+              icon="chevronLeft"
+              onClick={() => shift(-1)}
+              aria-label="Previous month"
+            />
+            <h2 className="cal-title">
+              {MONTHS[month - 1]} {year}
+            </h2>
+            <Button
+              variant="ghost"
+              size="sm"
+              icon="chevronRight"
+              onClick={() => shift(1)}
+              aria-label="Next month"
+            />
           </div>
-        ))}
-        {cells.map((day, i) => {
-          if (day === null) return <div className="cal-cell blank" key={`b${i}`} />;
-          const key = iso(day);
-          const entry = byDate.get(key);
-          const isToday = data?.today === key;
-          const moved = entry?.transferred ?? 0;
-          const hasFlow =
-            entry && (entry.inflow > 0 || entry.outflow > 0 || moved > 0);
-          const projected = entry?.events?.some((e) => !e.actual);
-          const provisional = entry?.events?.some((e) => e.provisional);
-          return (
-            <button
-              key={key}
-              className={[
-                "cal-cell",
-                isToday ? "today" : "",
-                hasFlow ? "has-flow" : "",
-                projected ? "projected" : "",
-                provisional ? "provisional" : "",
-                openDay === key ? "open" : "",
-              ].join(" ")}
-              onClick={() => setOpenDay(openDay === key ? null : key)}
-              aria-label={
-                hasFlow
-                  ? `${MONTHS[month - 1]} ${day}: ${money(
-                      entry.inflow
-                    )} in, ${money(entry.outflow)} out${
-                      moved > 0 ? `, ${money(moved)} moved between accounts` : ""
-                    }${projected ? ", projected" : ""}${
-                      provisional ? ", awaiting confirmation" : ""
-                    }`
-                  : `${MONTHS[month - 1]} ${day}: no activity`
-              }
+          <div className="cal-totals">
+            <span className="cal-total u-pos">
+              <Icon name="arrowUpRight" size={13} />
+              <Money value={totals.in} /> in
+            </span>
+            <span className="cal-total u-neg">
+              <Icon name="arrowDownRight" size={13} />
+              <Money value={totals.out} /> out
+            </span>
+            {totals.moved > 0 && (
+              <span className="cal-total u-flow">
+                <Icon name="transfer" size={13} />
+                <Money value={totals.moved} /> moved
+              </span>
+            )}
+            <span
+              className={`cal-total ${net >= 0 ? "u-pos" : "u-neg"}`}
             >
-              <span className="cal-daynum">{day}</span>
-              {entry?.inflow > 0 && (
-                <span className="cal-amt pos">+{money(entry.inflow)}</span>
-              )}
-              {entry?.outflow > 0 && (
-                <span className="cal-amt neg">−{money(entry.outflow)}</span>
-              )}
-              {moved > 0 && (
-                <span className="cal-amt moved">⇄ {money(moved)}</span>
-              )}
-              {projected && (
-                <span className="cal-proj" title="Projected, not yet posted">
-                  ◇
-                </span>
-              )}
-            </button>
-          );
-        })}
-      </div>
-
-      <p className="muted small cal-key">
-        <span className="pos">+ green</span> net worth up ·{" "}
-        <span className="neg">− red</span> net worth down ·{" "}
-        <span className="moved">⇄ gray</span> moved between your own accounts
-        (net zero) · ◇ projected · dashed outline = large and recent, still
-        waiting on a matching leg
-      </p>
-
-      {selected && (
-        <div className="card cal-detail">
-          <div className="section-head">
-            <h4>
-              {MONTHS[month - 1]} {Number(selected.date.slice(-2))}
-            </h4>
-            <span className={selected.net >= 0 ? "pos" : "neg"}>
-              {selected.net >= 0 ? "+" : "−"}
-              {money(Math.abs(selected.net))} net
+              <Money value={net} signed /> net
             </span>
           </div>
-          <div className="list">
-            {selected.events.map((e, i) => (
-              <div className="row cal-event" key={`${e.name}-${i}`}>
-                <div>
-                  <div className="row-title">{e.name}</div>
-                  <div className="muted small">
-                    {e.actual ? "Posted" : "Projected"}
-                    {e.direction === "transfer"
-                      ? ` · transfer${
-                          e.confidence ? ` (${e.confidence}% match)` : ""
-                        }`
-                      : ""}
-                    {e.provisional ? " · awaiting matching leg" : ""}
-                    {e.category ? ` · ${e.category}` : ""}
-                  </div>
+        </CardHeader>
+
+        <CardBody>
+          {error && <Alert tone="error">{error}</Alert>}
+
+          {loading && !data ? (
+            <div className="cal-grid" aria-hidden="true">
+              {Array.from({ length: 35 }, (_, i) => (
+                <Skeleton key={i} height={78} radius="var(--r-md)" />
+              ))}
+            </div>
+          ) : (
+            <div className={`cal-grid ${loading ? "is-reloading" : ""}`.trim()}>
+              {DOW.map((d) => (
+                <div className="cal-dow" key={d}>
+                  {d}
                 </div>
-                <span
-                  className={`amount ${
-                    e.direction === "transfer"
-                      ? "moved"
+              ))}
+              {cells.map((day, i) => {
+                if (day === null)
+                  return <div className="cal-cell is-blank" key={`b${i}`} />;
+                const key = iso(day);
+                const entry = byDate.get(key);
+                const isToday = data?.today === key;
+                const moved = entry?.transferred ?? 0;
+                const projected = entry?.events?.some((e) => !e.actual);
+                const provisional = entry?.events?.some((e) => e.provisional);
+                const hasFlow =
+                  entry && (entry.inflow > 0 || entry.outflow > 0 || moved > 0);
+                return (
+                  <button
+                    key={key}
+                    type="button"
+                    className={[
+                      "cal-cell",
+                      isToday && "is-today",
+                      projected && "is-projected",
+                      provisional && "is-provisional",
+                      openDay === key && "is-open",
+                    ]
+                      .filter(Boolean)
+                      .join(" ")}
+                    onClick={() => setOpenDay(openDay === key ? null : key)}
+                    aria-pressed={openDay === key}
+                    aria-label={
+                      hasFlow
+                        ? `${MONTHS[month - 1]} ${day}: ${money(
+                            entry.inflow
+                          )} in, ${money(entry.outflow)} out${
+                            moved > 0
+                              ? `, ${money(moved)} moved between accounts`
+                              : ""
+                          }${projected ? ", projected" : ""}${
+                            provisional ? ", awaiting confirmation" : ""
+                          }`
+                        : `${MONTHS[month - 1]} ${day}: no activity`
+                    }
+                  >
+                    <span className="cal-daynum">{day}</span>
+                    {entry?.inflow > 0 && (
+                      <span className="cal-amt u-pos">
+                        +{money(entry.inflow)}
+                      </span>
+                    )}
+                    {entry?.outflow > 0 && (
+                      <span className="cal-amt u-neg">
+                        −{money(entry.outflow)}
+                      </span>
+                    )}
+                    {moved > 0 && (
+                      <span className="cal-amt u-flow">⇄ {money(moved)}</span>
+                    )}
+                    {projected && (
+                      <span
+                        className="cal-proj"
+                        title="Projected, not yet posted"
+                      >
+                        ◇
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          )}
+
+          <p className="cal-key" style={{ marginTop: "var(--s-4)" }}>
+            <span className="cal-key-item">
+              <strong className="u-pos">+</strong> net worth up
+            </span>
+            <span className="cal-key-item">
+              <strong className="u-neg">−</strong> net worth down
+            </span>
+            <span className="cal-key-item">
+              <strong className="u-flow">⇄</strong> moved between your own
+              accounts (net zero)
+            </span>
+            <span className="cal-key-item">◇ projected</span>
+            <span className="cal-key-item">
+              dashed outline — large and recent, still waiting on a matching leg
+            </span>
+          </p>
+        </CardBody>
+      </Card>
+
+      {selected && (
+        <Card>
+          <CardHeader
+            title={`${MONTHS[month - 1]} ${Number(selected.date.slice(-2))}`}
+            subtitle={`${selected.events.length} ${
+              selected.events.length === 1 ? "entry" : "entries"
+            }`}
+            actions={
+              <span
+                className={`u-num ${selected.net >= 0 ? "u-pos" : "u-neg"}`}
+                style={{ fontWeight: 600 }}
+              >
+                <Money value={selected.net} signed /> net
+              </span>
+            }
+          />
+          <CardBody flush>
+            <div className="ledger">
+              {selected.events.map((e, i) => (
+                <div className="ledger-row" key={`${e.name}-${i}`}>
+                  <span
+                    className={`ledger-glyph ${
+                      e.direction === "income"
+                        ? "ledger-glyph--positive"
+                        : e.direction === "expense"
+                        ? "ledger-glyph--negative"
+                        : ""
+                    }`.trim()}
+                    aria-hidden="true"
+                  >
+                    <Icon
+                      name={
+                        e.direction === "transfer"
+                          ? "transfer"
+                          : e.direction === "income"
+                          ? "arrowUpRight"
+                          : "arrowDownRight"
+                      }
+                      size={15}
+                    />
+                  </span>
+                  <span className="ledger-main">
+                    <span className="ledger-title">
+                      <span>{e.name}</span>
+                    </span>
+                    <span className="ledger-meta">
+                      {e.actual ? "Posted" : "Projected"}
+                      {e.direction === "transfer"
+                        ? ` · transfer${
+                            e.confidence ? ` (${e.confidence}% match)` : ""
+                          }`
+                        : ""}
+                      {e.provisional ? " · awaiting matching leg" : ""}
+                      {e.category ? ` · ${e.category}` : ""}
+                    </span>
+                  </span>
+                  <span
+                    className={`ledger-amount ${
+                      e.direction === "transfer"
+                        ? "u-flow"
+                        : e.direction === "income"
+                        ? "u-pos"
+                        : "u-neg"
+                    }`}
+                  >
+                    {e.direction === "transfer"
+                      ? "⇄ "
                       : e.direction === "income"
-                      ? "pos"
-                      : "neg"
-                  }`}
-                >
-                  {e.direction === "transfer"
-                    ? "⇄ "
-                    : e.direction === "income"
-                    ? "+"
-                    : "−"}
-                  {money(e.amount)}
-                </span>
-              </div>
-            ))}
-          </div>
-        </div>
+                      ? "+"
+                      : "−"}
+                    {money(e.amount)}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </CardBody>
+        </Card>
       )}
     </div>
   );

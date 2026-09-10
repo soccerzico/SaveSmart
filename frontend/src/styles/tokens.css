@@ -1,0 +1,232 @@
+/* ==========================================================================
+   Design tokens
+   --------------------------------------------------------------------------
+   One source of truth for color, type, space, radius and elevation.
+   Components are written against *roles* (--text-secondary, --surface-1),
+   never raw hex, so the light/dark swap happens here and nowhere else.
+
+   Color discipline borrowed from the way payment dashboards handle it: the
+   brand hue is for navigation and primary actions, and green/red/amber are
+   reserved for financial state. Money never wears the brand color and a
+   button never wears the "positive" green.
+
+   Every text role below clears WCAG AA (>= 4.5:1) against both the card and
+   the page plane in its own mode; the numbers were measured, not eyeballed.
+   ========================================================================== */
+
+:root {
+  color-scheme: light;
+
+  /* -- Brand (navigation, primary action, single-series data) ------------ */
+  --brand-50: #eef1fd;
+  --brand-100: #dde3fb;
+  --brand-200: #c2cbf6;
+  --brand-300: #9dabef;
+  --brand-400: #7686e6;
+  --brand-500: #5b6ee1;
+  --brand-600: #4457d1;
+  --brand-700: #3644ad;
+  --brand-800: #2f3b8c;
+  --brand-900: #2a3372;
+
+  /* -- Neutral ramp (cool slate) ---------------------------------------- */
+  --slate-50: #f6f7f9;
+  --slate-100: #eef1f5;
+  --slate-200: #e4e8ee;
+  --slate-300: #cfd6e0;
+  --slate-400: #a4afbf;
+  --slate-500: #5c6a7d;
+  --slate-600: #475569;
+  --slate-700: #334155;
+  --slate-800: #1e293b;
+  --slate-900: #0f172a;
+
+  /* -- Surfaces & ink ---------------------------------------------------- */
+  --page: #f6f7f9;
+  --surface-1: #ffffff;          /* cards */
+  --surface-2: #f6f7f9;          /* inset wells, inputs, table headers */
+  --surface-3: #eef1f5;          /* hover wash */
+  --surface-inverse: #0f172a;
+
+  --text-primary: #0f172a;
+  --text-secondary: #475569;
+  --text-muted: #5c6a7d;
+  --text-on-brand: #ffffff;
+  --text-on-inverse: #f8fafc;
+
+  --border: #e4e8ee;
+  --border-strong: #cfd6e0;
+  --border-focus: var(--brand-500);
+  --link: var(--brand-700);
+
+  /* -- Financial state --------------------------------------------------- */
+  --positive: #067647;
+  --positive-soft: #e7f5ee;
+  --positive-border: #b9e2cd;
+  --negative: #b42318;
+  --negative-soft: #fdeceb;
+  --negative-border: #f6cbc7;
+  --warning: #b54708;
+  --warning-soft: #fdf1e6;
+  --warning-border: #f6d9bb;
+  --info-soft: var(--brand-50);
+  --info-border: var(--brand-100);
+
+  /* Neutral "money moved between your own accounts" — deliberately
+     achromatic: nothing happened to the total. */
+  --neutral-flow: var(--text-muted);
+
+  /* -- Data viz ---------------------------------------------------------- */
+  --viz-line: var(--brand-600);
+  --viz-line-soft: rgba(68, 87, 209, 0.1);   /* area wash, ~10% */
+  --viz-grid: #e9edf3;
+  --viz-axis: #cfd6e0;
+  --viz-annotation: #a4afbf;
+
+  /* -- Elevation --------------------------------------------------------- */
+  --shadow-xs: 0 1px 2px rgba(15, 23, 42, 0.04);
+  --shadow-sm: 0 1px 3px rgba(15, 23, 42, 0.06), 0 1px 2px rgba(15, 23, 42, 0.04);
+  --shadow-md: 0 4px 12px rgba(15, 23, 42, 0.08), 0 1px 3px rgba(15, 23, 42, 0.04);
+  --shadow-lg: 0 16px 40px rgba(15, 23, 42, 0.14), 0 4px 12px rgba(15, 23, 42, 0.06);
+  --ring: 0 0 0 3px rgba(91, 110, 225, 0.28);
+
+  /* -- Radius ------------------------------------------------------------ */
+  --r-xs: 4px;
+  --r-sm: 6px;
+  --r-md: 8px;
+  --r-lg: 12px;
+  --r-xl: 16px;
+  --r-full: 999px;
+
+  /* -- Space (4px base) --------------------------------------------------- */
+  --s-1: 4px;
+  --s-2: 8px;
+  --s-3: 12px;
+  --s-4: 16px;
+  --s-5: 20px;
+  --s-6: 24px;
+  --s-7: 32px;
+  --s-8: 40px;
+  --s-9: 56px;
+
+  /* -- Typography --------------------------------------------------------- */
+  --font-sans: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+    "Helvetica Neue", Arial, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+
+  --t-xs: 0.6875rem;   /* 11px — micro labels, chip dates */
+  --t-sm: 0.75rem;     /* 12px — captions, table meta */
+  --t-base: 0.8125rem; /* 13px — dense UI text */
+  --t-md: 0.875rem;    /* 14px — body */
+  --t-lg: 1rem;        /* 16px — card titles */
+  --t-xl: 1.25rem;     /* 20px — page titles */
+  --t-2xl: 1.5rem;     /* 24px — stat values */
+  --t-3xl: 2rem;       /* 32px — section hero */
+  --t-hero: 2.75rem;   /* 44px — the one number a view leads with */
+
+  /* -- Layout ------------------------------------------------------------- */
+  --sidebar-w: 244px;
+  --topbar-h: 60px;
+  --content-max: 1180px;
+  --z-sticky: 20;
+  --z-drawer: 60;
+  --z-modal: 80;
+  --z-toast: 100;
+}
+
+/* --------------------------------------------------------------------------
+   Dark mode. Selected, not flipped: each role gets its own step chosen for
+   the dark surface. Declared under both the OS media query and the explicit
+   [data-theme] stamp so the in-app toggle wins in either direction.
+   -------------------------------------------------------------------------- */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+
+    --page: #0d1015;
+    --surface-1: #151922;
+    --surface-2: #1b2029;
+    --surface-3: #222835;
+    --surface-inverse: #eef2f8;
+
+    --text-primary: #eef2f8;
+    --text-secondary: #a3aebf;
+    --text-muted: #8a95a6;
+    --text-on-brand: #0b1020;
+    --text-on-inverse: #0f172a;
+
+    --border: #262c38;
+    --border-strong: #333b4a;
+    --border-focus: var(--brand-400);
+    --link: var(--brand-300);
+
+    --positive: #3ecf8e;
+    --positive-soft: rgba(62, 207, 142, 0.12);
+    --positive-border: rgba(62, 207, 142, 0.28);
+    --negative: #f97066;
+    --negative-soft: rgba(249, 112, 102, 0.12);
+    --negative-border: rgba(249, 112, 102, 0.3);
+    --warning: #fdb022;
+    --warning-soft: rgba(253, 176, 34, 0.12);
+    --warning-border: rgba(253, 176, 34, 0.28);
+    --info-soft: rgba(118, 134, 230, 0.12);
+    --info-border: rgba(118, 134, 230, 0.28);
+
+    --viz-line: #8b9cf7;
+    --viz-line-soft: rgba(139, 156, 247, 0.12);
+    --viz-grid: #232a36;
+    --viz-axis: #333b4a;
+    --viz-annotation: #59637a;
+
+    --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.4);
+    --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.45);
+    --shadow-md: 0 4px 14px rgba(0, 0, 0, 0.5);
+    --shadow-lg: 0 18px 48px rgba(0, 0, 0, 0.6);
+    --ring: 0 0 0 3px rgba(139, 156, 247, 0.32);
+  }
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+
+  --page: #0d1015;
+  --surface-1: #151922;
+  --surface-2: #1b2029;
+  --surface-3: #222835;
+  --surface-inverse: #eef2f8;
+
+  --text-primary: #eef2f8;
+  --text-secondary: #a3aebf;
+  --text-muted: #8a95a6;
+  --text-on-brand: #0b1020;
+  --text-on-inverse: #0f172a;
+
+  --border: #262c38;
+  --border-strong: #333b4a;
+  --border-focus: var(--brand-400);
+  --link: var(--brand-300);
+
+  --positive: #3ecf8e;
+  --positive-soft: rgba(62, 207, 142, 0.12);
+  --positive-border: rgba(62, 207, 142, 0.28);
+  --negative: #f97066;
+  --negative-soft: rgba(249, 112, 102, 0.12);
+  --negative-border: rgba(249, 112, 102, 0.3);
+  --warning: #fdb022;
+  --warning-soft: rgba(253, 176, 34, 0.12);
+  --warning-border: rgba(253, 176, 34, 0.28);
+  --info-soft: rgba(118, 134, 230, 0.12);
+  --info-border: rgba(118, 134, 230, 0.28);
+
+  --viz-line: #8b9cf7;
+  --viz-line-soft: rgba(139, 156, 247, 0.12);
+  --viz-grid: #232a36;
+  --viz-axis: #333b4a;
+  --viz-annotation: #59637a;
+
+  --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.45);
+  --shadow-md: 0 4px 14px rgba(0, 0, 0, 0.5);
+  --shadow-lg: 0 18px 48px rgba(0, 0, 0, 0.6);
+  --ring: 0 0 0 3px rgba(139, 156, 247, 0.32);
+}

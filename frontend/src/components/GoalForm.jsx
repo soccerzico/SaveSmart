@@ -1,11 +1,11 @@
 import { useState } from "react";
+import { Alert, Button, CheckRow, Input, Money, MoneyInput, Progress } from "./ui";
 
-const money = (n) =>
-  n.toLocaleString("en-US", { style: "currency", currency: "USD" });
-
-// Used for both create and edit of a savings goal. Progress is no longer a
-// typed-in number — you pick which asset accounts count toward the goal, and
-// its "saved so far" is the sum of those accounts' balances.
+// Used for both create and edit of a savings goal. Progress is not a typed-in
+// number — you pick which asset accounts count toward the goal, and its
+// "saved so far" is the sum of those accounts' balances. The running total at
+// the bottom of the picker shows that sum as it is being assembled, so the
+// consequence of a checkbox is visible before saving.
 export default function GoalForm({ initial, accounts = [], onSubmit, onCancel }) {
   const [name, setName] = useState(initial?.name ?? "");
   const [targetAmount, setTargetAmount] = useState(
@@ -23,6 +23,7 @@ export default function GoalForm({ initial, accounts = [], onSubmit, onCancel })
   const selectedTotal = assetAccounts
     .filter((a) => selected.has(a.id))
     .reduce((sum, a) => sum + a.balance, 0);
+  const target = parseFloat(targetAmount) || 0;
 
   function toggle(id) {
     setSelected((prev) => {
@@ -52,68 +53,99 @@ export default function GoalForm({ initial, accounts = [], onSubmit, onCancel })
   }
 
   return (
-    <form className="inline-form" onSubmit={handleSubmit}>
-      {error && <p className="error">{error}</p>}
-      <div className="form-row">
-        <label>
-          Goal name
-          <input value={name} onChange={(e) => setName(e.target.value)} required />
-        </label>
-        <label>
-          Target date
-          <input
-            type="date"
-            value={targetDate ?? ""}
-            onChange={(e) => setTargetDate(e.target.value)}
-          />
-        </label>
-      </div>
-      <div className="form-row">
-        <label>
-          Target ($)
-          <input
-            type="number"
-            step="0.01"
-            min="0.01"
-            value={targetAmount}
-            onChange={(e) => setTargetAmount(e.target.value)}
-            required
-          />
-        </label>
+    <form className="form-stack" onSubmit={handleSubmit}>
+      {error && <Alert tone="error">{error}</Alert>}
+
+      <Input
+        label="Goal name"
+        value={name}
+        onChange={(e) => setName(e.target.value)}
+        placeholder="Emergency fund"
+        required
+        autoFocus
+      />
+
+      <div className="form-grid">
+        <MoneyInput
+          label="Target amount"
+          min="0.01"
+          value={targetAmount}
+          onChange={(e) => setTargetAmount(e.target.value)}
+          placeholder="0.00"
+          required
+        />
+        <Input
+          label="Target date"
+          type="date"
+          value={targetDate ?? ""}
+          onChange={(e) => setTargetDate(e.target.value)}
+          hint="Optional"
+        />
       </div>
 
-      <fieldset className="account-picker">
+      <fieldset className="fieldset">
         <legend>Accounts funding this goal</legend>
         {assetAccounts.length === 0 ? (
-          <p className="muted small">Add an asset account first.</p>
+          <p className="u-base u-muted" style={{ padding: "var(--s-2)" }}>
+            Add an asset account first — a goal tracks real balances, not a
+            number you maintain by hand.
+          </p>
         ) : (
           assetAccounts.map((a) => (
-            <label key={a.id} className="check-row">
-              <input
-                type="checkbox"
-                checked={selected.has(a.id)}
-                onChange={() => toggle(a.id)}
-              />
-              <span className="check-name">
-                {a.name}
-                {a.institution ? ` · ${a.institution}` : ""}
-              </span>
-              <span className="muted">{money(a.balance)}</span>
-            </label>
+            <CheckRow
+              key={a.id}
+              checked={selected.has(a.id)}
+              onChange={() => toggle(a.id)}
+              meta={<Money value={a.balance} />}
+            >
+              {a.name}
+              {a.institution && (
+                <span className="u-muted"> · {a.institution}</span>
+              )}
+            </CheckRow>
           ))
         )}
-        <div className="picker-total">
-          Counts toward goal: <strong>{money(selectedTotal)}</strong>
+
+        <div
+          className="stack--tight"
+          style={{
+            display: "flex",
+            flexDirection: "column",
+            gap: "var(--s-2)",
+            marginTop: "var(--s-3)",
+            paddingTop: "var(--s-3)",
+            borderTop: "1px solid var(--border)",
+          }}
+        >
+          <div className="row row--between u-base">
+            <span className="u-muted">Counts toward goal</span>
+            <strong className="u-num">
+              <Money value={selectedTotal} />
+              {target > 0 && (
+                <span className="u-muted" style={{ fontWeight: 400 }}>
+                  {" "}
+                  of <Money value={target} />
+                </span>
+              )}
+            </strong>
+          </div>
+          {target > 0 && (
+            <Progress
+              value={selectedTotal}
+              max={target}
+              label="Projected goal progress"
+            />
+          )}
         </div>
       </fieldset>
 
       <div className="form-actions">
-        <button type="submit" disabled={saving}>
-          {saving ? "Saving…" : "Save"}
-        </button>
-        <button type="button" className="ghost" onClick={onCancel}>
+        <Button variant="ghost" onClick={onCancel}>
           Cancel
-        </button>
+        </Button>
+        <Button type="submit" variant="primary" loading={saving}>
+          {initial ? "Save changes" : "Create goal"}
+        </Button>
       </div>
     </form>
   );
