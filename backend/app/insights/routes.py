@@ -30,6 +30,11 @@ log = logging.getLogger("savesmart.insights")
 MAX_PAST_DAYS = 730
 MAX_FUTURE_DAYS = 365
 
+# A whole-ledger dump is a legitimate ask (the MCP server does it), so the cap
+# is high enough to mean "everything" for a real account rather than silently
+# truncating. `total` in the response says when it wasn't enough.
+MAX_TRANSACTION_ROWS = 10000
+
 
 def _current_user_id() -> int:
     return int(get_jwt_identity())
@@ -168,12 +173,44 @@ def override_transfer(txn_id: int):
 @insights_bp.get("/transactions")
 @jwt_required()
 def list_transactions():
-    """Recent transactions, newest first."""
-    limit = _int_arg("limit", 100, 1, 500)
+    """Transactions, newest first.
+
+    `total` is the unfiltered count, so a caller asking for "everything" can
+    tell a complete answer from a truncated one rather than assuming.
+    """
+    user_id = _current_user_id()
+    limit = _int_arg("limit", 100, 1, MAX_TRANSACTION_ROWS)
+    offset = _int_arg("offset", 0, 0, 1_000_000)
+
+    query = Transaction.query.filter_by(user_id=user_id)
+    account_id = request.args.get("account_id")
+    if account_id:
+        try:
+            query = query.filter(Transaction.account_id == int(account_id))
+        except (TypeError, ValueError):
+            raise ApiError("'account_id' must be a whole number.")
+
+    days = request.args.get("days")
+    if days:
+        try:
+            query = query.filter(
+                Transaction.date >= _today() - timedelta(days=int(days))
+            )
+        except (TypeError, ValueError):
+            raise ApiError("'days' must be a whole number.")
+
+    total = query.count()
     rows = (
-        Transaction.query.filter_by(user_id=_current_user_id())
-        .order_by(Transaction.date.desc(), Transaction.id.desc())
+        query.order_by(Transaction.date.desc(), Transaction.id.desc())
+        .offset(offset)
         .limit(limit)
         .all()
     )
-    return jsonify({"transactions": [t.to_dict() for t in rows]})
+    return jsonify(
+        {
+            "transactions": [t.to_dict() for t in rows],
+            "total": total,
+            "returned": len(rows),
+            "offset": offset,
+        }
+    )
