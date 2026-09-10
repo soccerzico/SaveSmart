@@ -17,6 +17,7 @@ from plaid.model.item_public_token_exchange_request import (
 from plaid.model.item_remove_request import ItemRemoveRequest
 from plaid.model.link_token_create_request import LinkTokenCreateRequest
 from plaid.model.link_token_create_request_user import LinkTokenCreateRequestUser
+from plaid.model.link_token_transactions import LinkTokenTransactions
 from plaid.model.products import Products
 
 from ..extensions import db
@@ -29,6 +30,7 @@ from ..plaid_service import (
     is_configured,
     to_account_type,
 )
+from ..transactions_service import DAYS_REQUESTED, sync_all_transactions
 from ..utils import ApiError
 
 plaid_bp = Blueprint("plaid", __name__)
@@ -87,13 +89,19 @@ def status():
 def create_link_token():
     client = _client_or_error()
     cfg = get_config()
-    req = LinkTokenCreateRequest(
+    kwargs = dict(
         products=[Products(p) for p in cfg["products"]],
         client_name="SaveSmart",
         country_codes=[CountryCode(c) for c in cfg["country_codes"]],
         language="en",
         user=LinkTokenCreateRequestUser(client_user_id=str(_current_user_id())),
     )
+    # Ask for the full two years of history up front. Plaid honours this only
+    # while Transactions is first added to an Item, so it shapes new links; the
+    # ones already connected keep whatever their 90-day default pulled.
+    if "transactions" in cfg["products"]:
+        kwargs["transactions"] = LinkTokenTransactions(days_requested=DAYS_REQUESTED)
+    req = LinkTokenCreateRequest(**kwargs)
     try:
         resp = client.link_token_create(req)
     except ApiException as exc:
@@ -159,7 +167,19 @@ def sync():
         except ApiException as exc:
             log.error("sync failed for %s: %s", item.item_id, exc.body)
             errors.append(item.item_id)
-    return jsonify({"accounts_synced": total, "items": len(items), "errors": errors})
+
+    # Balances first: the ledger upsert maps Plaid account ids onto Account
+    # rows, so those rows have to exist before transactions land.
+    txns = sync_all_transactions(client, user_id)
+
+    return jsonify(
+        {
+            "accounts_synced": total,
+            "items": len(items),
+            "errors": errors,
+            "transactions": txns,
+        }
+    )
 
 
 @plaid_bp.get("/items")

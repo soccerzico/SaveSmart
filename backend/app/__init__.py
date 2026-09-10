@@ -45,6 +45,7 @@ def create_app(config_object: type = Config) -> Flask:
     from .recurring.routes import recurring_bp
     from .plaid.routes import plaid_bp
     from .assistant.routes import assistant_bp
+    from .insights.routes import insights_bp
     from .admin.routes import admin_bp
 
     app.register_blueprint(auth_bp, url_prefix="/api/auth")
@@ -53,6 +54,7 @@ def create_app(config_object: type = Config) -> Flask:
     app.register_blueprint(recurring_bp, url_prefix="/api/recurring")
     app.register_blueprint(plaid_bp, url_prefix="/api/plaid")
     app.register_blueprint(assistant_bp, url_prefix="/api/assistant")
+    app.register_blueprint(insights_bp, url_prefix="/api/insights")
     # Dev-only; the route itself 404s when not in debug mode.
     app.register_blueprint(admin_bp, url_prefix="/api/admin")
 
@@ -71,32 +73,54 @@ def create_app(config_object: type = Config) -> Flask:
     # (Flask-Migrate) later; create_all is fine while the schema is young.
     with app.app_context():
         db.create_all()
-        _ensure_account_columns()
+        _ensure_columns()
 
     return app
 
 
-def _ensure_account_columns():
-    """Additive, idempotent migration for columns create_all won't add to an
-    existing SQLite `accounts` table. Protects data across the schema churn
-    while we're pre-Flask-Migrate. No-op on non-SQLite backends.
+# Columns create_all() won't add to tables that already exist. Keyed by table,
+# each entry is column name -> the ALTER that introduces it.
+_ADDITIVE_COLUMNS = {
+    "accounts": {
+        "source": "ALTER TABLE accounts ADD COLUMN source VARCHAR(16) NOT NULL DEFAULT 'manual'",
+        "plaid_item_id": "ALTER TABLE accounts ADD COLUMN plaid_item_id INTEGER",
+        "plaid_account_id": "ALTER TABLE accounts ADD COLUMN plaid_account_id VARCHAR(64)",
+    },
+    "plaid_items": {
+        "transactions_cursor": "ALTER TABLE plaid_items ADD COLUMN transactions_cursor TEXT",
+    },
+    "transactions": {
+        "transfer_group_id": "ALTER TABLE transactions ADD COLUMN transfer_group_id VARCHAR(64)",
+        "transfer_confidence": "ALTER TABLE transactions ADD COLUMN transfer_confidence INTEGER",
+        "transfer_override": "ALTER TABLE transactions ADD COLUMN transfer_override VARCHAR(16)",
+    },
+    "snapshots": {
+        # Existing rows predate reconstruction, so they are live by definition.
+        "source": "ALTER TABLE snapshots ADD COLUMN source VARCHAR(16) NOT NULL DEFAULT 'live'",
+        "is_partial": "ALTER TABLE snapshots ADD COLUMN is_partial BOOLEAN NOT NULL DEFAULT 0",
+    },
+}
+
+
+def _ensure_columns():
+    """Additive, idempotent migration for columns create_all won't add to
+    existing SQLite tables. Protects data across the schema churn while we're
+    pre-Flask-Migrate. No-op on non-SQLite backends.
     """
     from sqlalchemy import text
 
     if db.engine.dialect.name != "sqlite":
         return
-    existing = {
-        row[1] for row in db.session.execute(text("PRAGMA table_info(accounts)"))
-    }
-    additions = {
-        "source": "ALTER TABLE accounts ADD COLUMN source VARCHAR(16) NOT NULL DEFAULT 'manual'",
-        "plaid_item_id": "ALTER TABLE accounts ADD COLUMN plaid_item_id INTEGER",
-        "plaid_account_id": "ALTER TABLE accounts ADD COLUMN plaid_account_id VARCHAR(64)",
-    }
+
     changed = False
-    for col, ddl in additions.items():
-        if col not in existing:
-            db.session.execute(text(ddl))
-            changed = True
+    for table, additions in _ADDITIVE_COLUMNS.items():
+        rows = list(db.session.execute(text(f"PRAGMA table_info({table})")))
+        if not rows:
+            continue  # create_all() just made it with every column present
+        existing = {row[1] for row in rows}
+        for col, ddl in additions.items():
+            if col not in existing:
+                db.session.execute(text(ddl))
+                changed = True
     if changed:
         db.session.commit()

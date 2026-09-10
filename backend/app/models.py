@@ -261,6 +261,9 @@ class PlaidItem(db.Model):
     # unchanged. DB column keeps its name; Text holds the longer ciphertext.
     _access_token = db.Column("access_token", db.Text, nullable=False)
     institution_name = db.Column(db.String(120), nullable=True)
+    # Opaque cursor from /transactions/sync. NULL means "never synced"; the
+    # first sync then walks the Item's full available history.
+    transactions_cursor = db.Column(db.Text, nullable=True)
     created_at = db.Column(db.DateTime(timezone=True), default=_utcnow, nullable=False)
 
     @property
@@ -310,6 +313,17 @@ class Snapshot(db.Model):
     goals_json = db.Column(db.Text, nullable=False, default="[]")
     note = db.Column(db.Text, nullable=True)
 
+    # 'live'          - captured at the time from real balances.
+    # 'reconstructed' - back-computed from transaction history (see
+    #                   transactions_service.reconstruct_daily_balances).
+    # The two series can legitimately disagree for the same date: a live
+    # snapshot only knew the accounts linked *then*, while a reconstructed one
+    # replays every account we know about now. Keep them distinguishable.
+    source = db.Column(db.String(16), nullable=False, default="live", index=True)
+    # True when at least one account could not be reconstructed for that date
+    # (investment accounts, or dates before an account's transaction coverage).
+    is_partial = db.Column(db.Boolean, nullable=False, default=False)
+
     def to_dict(self) -> dict:
         try:
             goals = json.loads(self.goals_json)
@@ -326,4 +340,95 @@ class Snapshot(db.Model):
             "monthly_net": round(self.monthly_net_cents / 100, 2),
             "goals": goals,
             "note": self.note,
+            "source": self.source,
+            "is_partial": self.is_partial,
+        }
+
+
+class Transaction(db.Model):
+    """One posted transaction from Plaid, stored as a local ledger.
+
+    Kept verbatim in Plaid's sign convention: **amount_cents is positive when
+    money leaves the account** (a purchase, a withdrawal) and negative when it
+    arrives (a deposit, a refund). That holds for credit cards too, where a
+    purchase is positive and *increases* what you owe — so reconstructing a
+    liability's history subtracts where an asset's adds. Flipping the sign on
+    ingest would bury that asymmetry, so it stays as Plaid sends it and the
+    reconstruction math owns the interpretation.
+
+    Rows are the raw material for historical balances: today's balance minus
+    the transactions since date T gives the balance as of T.
+    """
+
+    __tablename__ = "transactions"
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(
+        db.Integer, db.ForeignKey("users.id"), nullable=False, index=True
+    )
+    account_id = db.Column(
+        db.Integer, db.ForeignKey("accounts.id"), nullable=False, index=True
+    )
+    # Plaid's id, so re-syncs upsert instead of duplicating.
+    plaid_transaction_id = db.Column(
+        db.String(64), nullable=False, unique=True, index=True
+    )
+    date = db.Column(db.Date, nullable=False, index=True)
+    amount_cents = db.Column(db.Integer, nullable=False)
+    name = db.Column(db.String(255), nullable=False, default="")
+    merchant_name = db.Column(db.String(255), nullable=True)
+    category = db.Column(db.String(120), nullable=True)
+    # Pending rows are excluded from reconstruction: they mutate and can vanish,
+    # and the balance they'd explain is already inside Plaid's `available`.
+    pending = db.Column(db.Boolean, nullable=False, default=False, index=True)
+
+    # Set when this row has been paired with its counter-leg in another of the
+    # user's accounts - i.e. money moved rather than arrived or left. Both legs
+    # of a pair share the group id. See app/transfers.py.
+    transfer_group_id = db.Column(db.String(64), nullable=True, index=True)
+    transfer_confidence = db.Column(db.Integer, nullable=True)  # 0-100
+    # A user verdict always outranks the matcher: 'transfer' forces the pairing
+    # to stand, 'not_transfer' keeps the row green/red no matter what matches.
+    transfer_override = db.Column(db.String(16), nullable=True)
+
+    created_at = db.Column(db.DateTime(timezone=True), default=_utcnow, nullable=False)
+
+    # Deleting an account takes its ledger with it - otherwise unlinking an
+    # institution leaves orphaned rows that still surface in the calendar.
+    account = db.relationship(
+        "Account",
+        backref=db.backref("transactions", lazy=True, cascade="all, delete-orphan"),
+    )
+
+    @property
+    def is_inflow(self) -> bool:
+        """True when money moved *into* the account (Plaid sends those negative)."""
+        return self.amount_cents < 0
+
+    @property
+    def is_transfer(self) -> bool:
+        """Money moved between the user's own accounts - net worth unchanged."""
+        if self.transfer_override == "not_transfer":
+            return False
+        if self.transfer_override == "transfer":
+            return True
+        return self.transfer_group_id is not None
+
+    def to_dict(self) -> dict:
+        return {
+            "id": self.id,
+            "account_id": self.account_id,
+            "date": self.date.isoformat(),
+            # Flipped to human convention at the edge: positive = money in.
+            "amount": round(-self.amount_cents / 100, 2),
+            "name": self.name,
+            "merchant_name": self.merchant_name,
+            "category": self.category,
+            "pending": self.pending,
+            "direction": "transfer"
+            if self.is_transfer
+            else ("income" if self.is_inflow else "expense"),
+            "transfer_group_id": self.transfer_group_id,
+            "transfer_confidence": self.transfer_confidence,
+            "transfer_override": self.transfer_override,
         }

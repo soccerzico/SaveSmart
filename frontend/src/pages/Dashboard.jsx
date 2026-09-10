@@ -6,6 +6,8 @@ import AccountForm from "../components/AccountForm.jsx";
 import GoalForm from "../components/GoalForm.jsx";
 import RecurringForm from "../components/RecurringForm.jsx";
 import PlaidLinkButton from "../components/PlaidLinkButton.jsx";
+import ForecastTab from "../components/ForecastTab.jsx";
+import CalendarView from "../components/CalendarView.jsx";
 
 const money = (n) =>
   n.toLocaleString("en-US", { style: "currency", currency: "USD" });
@@ -18,6 +20,12 @@ const formatDate = (iso) =>
     day: "numeric",
     year: "numeric",
   });
+
+const TABS = [
+  { id: "overview", label: "Overview", icon: "▤" },
+  { id: "forecast", label: "Forecast", icon: "↗" },
+  { id: "calendar", label: "Calendar", icon: "▦" },
+];
 
 const TYPE_LABELS = {
   checking: "Checking",
@@ -75,6 +83,7 @@ export default function Dashboard() {
   const [syncing, setSyncing] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [tab, setTab] = useState("overview");
   // Guards the one-time auto-sync so it doesn't loop on every refresh.
   const didAutoSync = useRef(false);
 
@@ -234,6 +243,30 @@ export default function Dashboard() {
         </div>
       </section>
 
+      <nav className="tabs container" role="tablist" aria-label="Dashboard views">
+        {TABS.map((t) => (
+          <button
+            key={t.id}
+            role="tab"
+            aria-selected={tab === t.id}
+            className={`tab ${tab === t.id ? "on" : ""}`}
+            onClick={() => setTab(t.id)}
+          >
+            <span aria-hidden="true">{t.icon}</span> {t.label}
+          </button>
+        ))}
+      </nav>
+
+      {tab === "forecast" && <ForecastTab />}
+
+      {tab === "calendar" && (
+        <section className="container">
+          <CalendarView />
+        </section>
+      )}
+
+      {tab === "overview" && (
+        <>
       {/* ---- Accounts ---- */}
       <section className="container">
         <div className="section-head">
@@ -256,6 +289,11 @@ export default function Dashboard() {
             {plaidItems.map((item) => (
               <span className="institution-chip" key={item.item_id}>
                 🏦 {item.institution_name || "Linked institution"}
+                {item.created_at && (
+                  <span className="chip-date">
+                    linked {item.created_at.slice(0, 10)}
+                  </span>
+                )}
                 <button
                   className="chip-x"
                   title="Disconnect"
@@ -523,6 +561,8 @@ export default function Dashboard() {
           )}
         </div>
       </section>
+        </>
+      )}
     </div>
   );
 }
