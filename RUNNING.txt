@@ -25,16 +25,18 @@ You need Python 3.11+ and Node 18+ installed.
 
 RUNNING IT (unified launcher)
 ------------------------------------------------------------------------------
-From the repository root:
+From any terminal (PowerShell or cmd):
 
-  python dev.py                Start the backend API only.
-                               -> http://127.0.0.1:5000
-
-  python dev.py --frontend     Start the backend AND the React dev server.
+  savesmart launch             Start the backend AND the React dev server.
                                -> API:      http://127.0.0.1:5000
                                -> Frontend: http://localhost:5173
+  savesmart launch backend     Start the backend API only.
+  savesmart launch frontend    Start the React dev server only.
 
-  (--full is an alias for --frontend.)
+`savesmart` runs dev.py with the backend venv's Python, so there is no need to
+activate the venv first. It's found via shims in %USERPROFILE%\.local\bin
+that forward to savesmart.ps1 / savesmart.cmd in the repo root. Without the
+shims, run the same thing from the repo root as: python dev.py [backend|frontend]
 
 The launcher streams output from both processes, each line prefixed with
 [backend] or [frontend]. Press Ctrl+C once to stop everything cleanly.
@@ -73,7 +75,7 @@ If you prefer two terminals instead of the launcher:
 
 TROUBLESHOOTING
 ------------------------------------------------------------------------------
-* "backend/venv not found" from dev.py — run the one-time backend setup above.
+* "backend/venv not found" from savesmart/dev.py — run the one-time backend setup above.
 * Port already in use — an old server is still running. Stop it, or on Windows:
     Get-Process node,python | Stop-Process -Force
 * Frontend can't reach the API — make sure the backend is running; Vite proxies

@@ -1,8 +1,11 @@
 #!/usr/bin/env python3
 """Unified launcher for SaveSmart.
 
-  python dev.py              # backend API only (http://127.0.0.1:5000)
-  python dev.py --frontend   # backend + Vite dev server (http://localhost:5173)
+  python dev.py              # backend API + Vite dev server
+  python dev.py backend      # backend API only (http://127.0.0.1:5000)
+  python dev.py frontend     # Vite dev server only (http://localhost:5173)
+
+Also available as `savesmart launch [backend|frontend]` via savesmart.cmd.
 
 Output from each process is streamed live with a [backend] / [frontend] prefix.
 Press Ctrl+C once to shut everything down cleanly.
@@ -28,11 +31,13 @@ RESET = "\033[0m"
 _procs = []
 
 
+VENV = BACKEND / "venv"
+VENV_BIN = VENV / ("Scripts" if IS_WINDOWS else "bin")
+
+
 def backend_python() -> str:
     """Prefer the backend's virtualenv interpreter; fall back to this one."""
-    name = "python.exe" if IS_WINDOWS else "python"
-    sub = "Scripts" if IS_WINDOWS else "bin"
-    venv = BACKEND / "venv" / sub / name
+    venv = VENV_BIN / ("python.exe" if IS_WINDOWS else "python")
     if venv.exists():
         return str(venv)
     print(
@@ -85,13 +90,16 @@ def terminate_all():
 def main():
     parser = argparse.ArgumentParser(description="Boot the SaveSmart app.")
     parser.add_argument(
-        "--frontend",
-        "--full",
-        dest="frontend",
-        action="store_true",
-        help="Also start the Vite frontend dev server.",
+        "target",
+        nargs="?",
+        choices=["backend", "frontend"],
+        help="Start only this half. Omit to start both.",
     )
+    # Old flags from when backend-only was the default; both now mean "everything".
+    parser.add_argument("--frontend", "--full", action="store_true", help=argparse.SUPPRESS)
     args = parser.parse_args()
+    run_backend = args.target in (None, "backend")
+    run_frontend = args.target in (None, "frontend")
 
     if IS_WINDOWS:
         # Enable ANSI escape handling in the Windows console.
@@ -100,18 +108,21 @@ def main():
     env = os.environ.copy()
     env["PYTHONPATH"] = str(BACKEND)
     env["PYTHONUNBUFFERED"] = "1"  # so backend log lines flush immediately
+    if VENV.exists():
+        # Equivalent of activating the venv for the child processes.
+        env["VIRTUAL_ENV"] = str(VENV)
+        env["PATH"] = str(VENV_BIN) + os.pathsep + env.get("PATH", "")
 
-    print(f"{CYAN}[dev]{RESET} Starting backend (http://127.0.0.1:5000)…")
-    start("backend", [backend_python(), "run.py"], BACKEND, CYAN, env)
+    if run_backend:
+        print(f"{CYAN}[dev]{RESET} Starting backend (http://127.0.0.1:5000)…")
+        start("backend", [backend_python(), "run.py"], BACKEND, CYAN, env)
 
-    if args.frontend:
+    if run_frontend:
         print(f"{MAGENTA}[dev]{RESET} Starting frontend (http://localhost:5173)…")
         # .cmd shims (npm) can't be launched directly by CreateProcess on
         # Windows, so go through cmd.exe there.
         npm = ["cmd", "/c", "npm", "run", "dev"] if IS_WINDOWS else ["npm", "run", "dev"]
-        start("frontend", npm, FRONTEND, MAGENTA)
-    else:
-        print(f"{CYAN}[dev]{RESET} Tip: pass --frontend to also start the React dev server.")
+        start("frontend", npm, FRONTEND, MAGENTA, env)
 
     try:
         # If any child dies, bring the rest down too.
