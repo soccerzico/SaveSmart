@@ -22,6 +22,7 @@ import {
   ACCOUNT_TYPE_LABELS,
   ACCOUNT_TYPE_ORDER,
   percent,
+  todayIso,
 } from "../lib/format.js";
 
 // One glyph per account type, so a rolled-up list still reads as distinct
@@ -70,7 +71,7 @@ export default function Overview() {
     let stale = false;
     api
       .get(
-        `/insights/balance-series?past=${HISTORY_DAYS}&future=${HORIZON_DAYS}`,
+        `/insights/balance-series?past=${HISTORY_DAYS}&future=${HORIZON_DAYS}&today=${todayIso()}`,
       )
       .then((res) => {
         if (stale) return;

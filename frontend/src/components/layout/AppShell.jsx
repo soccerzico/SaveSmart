@@ -14,6 +14,7 @@ const NAV = [
     items: [
       { to: "/", label: "Overview", icon: "overview", end: true },
       { to: "/accounts", label: "Accounts", icon: "wallet" },
+      { to: "/transactions", label: "Transactions", icon: "table" },
       { to: "/cashflow", label: "Cashflow", icon: "flow" },
       { to: "/goals", label: "Goals", icon: "target" },
     ],

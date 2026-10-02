@@ -124,7 +124,7 @@ export default function Accounts() {
         <Card>
           <CardHeader
             title="Linked institutions"
-            subtitle="Balances here are read-only and refreshed on sync"
+            subtitle="Read-only. Sync refreshes balances and pulls in new transactions"
           />
           <CardBody>
             <div className="institutions">

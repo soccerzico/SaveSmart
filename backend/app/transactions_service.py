@@ -292,6 +292,45 @@ def reconstruct_daily_balances(user_id: int, start: date, end: date) -> list:
     return series
 
 
+def _measured_cashflow(user_id: int, days: list, window_days: int = 30) -> dict:
+    """Measured income/expense for each day in `days`, from real transactions.
+
+    Sums actual non-transfer activity in the `window_days` ending on each day,
+    rather than reading today's `RecurringTransaction` config - recurring items
+    change over time (a loan gets paid off, a rate drops, a raise lands), so
+    "what the setup looks like today" is not "what was true back then". This is
+    the same income/expense classification `Transaction.to_dict` already uses
+    (is_transfer excluded, is_inflow decides the sign), just aggregated into a
+    rolling window instead of listed transaction-by-transaction.
+
+    One bulk query covers every requested day; each day then sums its own
+    window from the same in-memory rows. A day within `window_days` of the
+    start of the ledger gets a genuinely short window and reads low rather than
+    being scaled up to a guessed monthly figure - measured-but-partial beats
+    invented-but-round, same trade the reconstruction itself makes elsewhere.
+    """
+    if not days:
+        return {}
+    earliest = min(days) - timedelta(days=window_days - 1)
+    latest = max(days)
+    rows = Transaction.query.filter(
+        Transaction.user_id == user_id,
+        Transaction.pending.is_(False),
+        Transaction.date >= earliest,
+        Transaction.date <= latest,
+    ).all()
+    real = [r for r in rows if not r.is_transfer]
+
+    result = {}
+    for day in days:
+        window_start = day - timedelta(days=window_days - 1)
+        in_window = [r for r in real if window_start <= r.date <= day]
+        income = sum(-r.amount_cents for r in in_window if r.is_inflow)
+        expense = sum(r.amount_cents for r in in_window if not r.is_inflow)
+        result[day] = {"income": income, "expense": expense, "net": income - expense}
+    return result
+
+
 def backfill_snapshots(user_id: int, days: int = 90, step_days: int = 7) -> dict:
     """Persist reconstructed Snapshot rows across the recent past.
 
@@ -300,8 +339,6 @@ def backfill_snapshots(user_id: int, days: int = 90, step_days: int = 7) -> dict
     are written with source='reconstructed' and skipped where one already exists
     for that date, so re-running is idempotent.
     """
-    from .cashflow import monthly_cashflow
-
     today = _utcnow().date()
     start = today - timedelta(days=days)
     series = reconstruct_daily_balances(user_id, start, today)
@@ -315,15 +352,18 @@ def backfill_snapshots(user_id: int, days: int = 90, step_days: int = 7) -> dict
         ).all()
     }
 
-    cash = monthly_cashflow(user_id)
+    points = series[::step_days]
+    wanted_days = [date.fromisoformat(p["date"]) for p in points]
+    cash_by_day = _measured_cashflow(user_id, wanted_days)
     written = skipped = 0
 
-    for point in series[::step_days]:
+    for point in points:
         day = date.fromisoformat(point["date"])
         if day in existing:
             skipped += 1
             continue
         stamp = datetime.combine(day, time(23, 59), tzinfo=timezone.utc)
+        cash = cash_by_day[day]
         db.session.add(
             Snapshot(
                 user_id=user_id,
@@ -331,15 +371,16 @@ def backfill_snapshots(user_id: int, days: int = 90, step_days: int = 7) -> dict
                 net_worth_cents=round(point["net_worth"] * 100),
                 assets_cents=round(point["assets"] * 100),
                 liabilities_cents=round(point["liabilities"] * 100),
-                # Cashflow is today's recurring setup; we can't know what it was
-                # months ago, so it is carried, not invented.
+                # Measured from the ledger for the 30 days ending on this day -
+                # see _measured_cashflow - not today's recurring setup.
                 monthly_income_cents=round(cash["income"]),
                 monthly_expense_cents=round(cash["expense"]),
                 monthly_net_cents=round(cash["net"]),
                 goals_json="[]",
                 source="reconstructed",
                 is_partial=point["partial"],
-                note="Reconstructed from transaction history.",
+                note="Reconstructed from transaction history; income/expense "
+                "measured over the trailing 30 days, not today's recurring setup.",
             )
         )
         written += 1

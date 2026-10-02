@@ -111,14 +111,17 @@ def current_net_worth_cents(user_id: int) -> int:
     return assets - liabilities
 
 
-def forecast_daily_balances(user_id: int, days: int = 90) -> list:
+def forecast_daily_balances(user_id: int, days: int = 90, today: date = None) -> list:
     """Project net worth forward one point per day, starting tomorrow.
 
     Today itself belongs to the reconstructed series, so the forecast starts the
     following day and carries today's balance as its opening value - the two
     halves meet without duplicating or skipping a point.
+
+    `today` is the user's local date. Defaulting to UTC puts "today" a day ahead
+    every US evening, which shifts the seam between history and forecast.
     """
-    today = _utcnow().date()
+    today = today or _utcnow().date()
     start = today + timedelta(days=1)
     end = today + timedelta(days=days)
 
@@ -146,18 +149,25 @@ def forecast_daily_balances(user_id: int, days: int = 90) -> list:
     return series
 
 
-def calendar_month(user_id: int, year: int, month: int) -> dict:
+def calendar_month(user_id: int, year: int, month: int, today: date = None) -> dict:
     """Day-keyed money movement for one month.
 
     Past days show what actually happened (real Plaid transactions); today and
     future days show what is expected from recurring items. A month that spans
     the boundary gets both, each entry flagged so the UI never presents a
     projection as a fact.
+
+    Pending transactions are included and flagged. They're excluded from balance
+    reconstruction (they mutate and can vanish), but a calendar is exactly where
+    someone looks for what they spent this week - and this week's activity is
+    pending by nature. Hiding it made the last few days look empty.
+
+    `today` is the user's local date; see forecast_daily_balances.
     """
     last_day = _calendar.monthrange(year, month)[1]
     first = date(year, month, 1)
     last = date(year, month, last_day)
-    today = _utcnow().date()
+    today = today or _utcnow().date()
 
     days = {}
     # day -> transfer group ids already added to that day's `transferred` total.
@@ -182,9 +192,10 @@ def calendar_month(user_id: int, year: int, month: int) -> dict:
         rows = (
             Transaction.query.filter(
                 Transaction.user_id == user_id,
-                Transaction.pending.is_(False),
                 Transaction.date >= first,
-                Transaction.date <= min(last, today),
+                # Pending rows can be dated a day or two ahead of the user's
+                # clock (scheduled transfers are), so allow them past `today`.
+                Transaction.date <= min(last, today + timedelta(days=2)),
             )
             .order_by(Transaction.date.asc())
             .all()
@@ -205,8 +216,11 @@ def calendar_month(user_id: int, year: int, month: int) -> dict:
             # A large recent movement may simply be waiting for its counter-leg
             # to post. Rather than commit it to green or red, hold it as
             # provisional until the window closes or a partner turns up.
+            # Pending is its own, stronger "not settled" state, so it doesn't
+            # also need the provisional treatment.
             provisional = (
                 not transfer
+                and not row.pending
                 and abs(row.amount_cents) >= MIN_CENTS
                 and (today - row.date).days <= PROVISIONAL_DAYS
             )
@@ -232,6 +246,7 @@ def calendar_month(user_id: int, year: int, month: int) -> dict:
                     else ("income" if amount >= 0 else "expense"),
                     "category": row.category,
                     "actual": True,
+                    "pending": row.pending,
                     "provisional": provisional,
                     "confidence": row.transfer_confidence,
                 }
@@ -253,6 +268,7 @@ def calendar_month(user_id: int, year: int, month: int) -> dict:
                     "direction": event["direction"],
                     "category": None,
                     "actual": False,
+                    "pending": False,
                     "provisional": False,
                     "confidence": None,
                 }
@@ -264,9 +280,21 @@ def calendar_month(user_id: int, year: int, month: int) -> dict:
         entry["transferred"] = round(entry["transferred"], 2)
         entry["net"] = round(entry["inflow"] - entry["outflow"], 2)
 
+    newest = (
+        Transaction.query.filter(
+            Transaction.user_id == user_id, Transaction.pending.is_(False)
+        )
+        .order_by(Transaction.date.desc())
+        .first()
+    )
+
     return {
         "year": year,
         "month": month,
         "days": [days[k] for k in sorted(days)],
         "today": today.isoformat(),
+        # Banks post card activity a few business days late. Surfacing the
+        # newest posted date lets the UI say "not arrived yet" instead of
+        # leaving recent days looking like no money moved.
+        "latest_posted": newest.date.isoformat() if newest else None,
     }

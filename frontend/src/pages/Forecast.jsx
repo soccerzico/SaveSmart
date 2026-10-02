@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { api } from "../api/client";
 import BalanceChart from "../components/BalanceChart.jsx";
+import { todayIso } from "../lib/format.js";
 import { Page, PageHeader } from "../components/layout/Page.jsx";
 import {
   Alert,
@@ -43,7 +44,7 @@ export default function Forecast() {
     setError("");
     try {
       const res = await api.get(
-        `/insights/balance-series?past=${past}&future=${future}`
+        `/insights/balance-series?past=${past}&future=${future}&today=${todayIso()}`
       );
       setData(res);
     } catch (err) {

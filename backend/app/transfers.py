@@ -92,10 +92,11 @@ def link_transfers(user_id: int, reset: bool = True) -> dict:
     if not account_ids:
         return {"pairs": 0, "cleared": 0}
 
-    rows = Transaction.query.filter(
-        Transaction.user_id == user_id,
-        Transaction.pending.is_(False),
-    ).all()
+    # Pending rows are matched too: now that the calendar shows them, a pending
+    # transfer between two of the user's accounts should read gray, not as a
+    # green deposit and a red withdrawal. When a pending leg posts, Plaid
+    # replaces it with a new row, and the rematch after that sync re-pairs it.
+    rows = Transaction.query.filter(Transaction.user_id == user_id).all()
 
     cleared = 0
     if reset:

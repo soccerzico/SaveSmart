@@ -10,7 +10,7 @@ import {
   Money,
   Skeleton,
 } from "./ui";
-import { money } from "../lib/format.js";
+import { formatDateShort, money, todayIso } from "../lib/format.js";
 
 // Month grid of money in and out. Past days show what actually happened
 // (real transactions); today onward shows what recurring items predict.
@@ -45,7 +45,7 @@ export default function CalendarView() {
     setLoading(true);
     setError("");
     api
-      .get(`/insights/calendar?year=${year}&month=${month}`)
+      .get(`/insights/calendar?year=${year}&month=${month}&today=${todayIso()}`)
       .then((res) => {
         if (!stale) setData(res);
       })
@@ -102,6 +102,18 @@ export default function CalendarView() {
   );
   const net = totals.in - totals.out;
 
+  // Banks post card activity a few business days late, so the most recent
+  // days of a month are often blank simply because nothing has arrived yet.
+  // Say so only when this month actually contains days past the newest post.
+  const latestPosted = data?.latest_posted;
+  const monthEnd = iso(daysInMonth);
+  const lagging =
+    latestPosted &&
+    data?.today &&
+    latestPosted < data.today &&
+    monthEnd > latestPosted &&
+    iso(1) <= data.today;
+
   const selected = openDay ? byDate.get(openDay) : null;
 
   return (
@@ -152,6 +164,14 @@ export default function CalendarView() {
 
         <CardBody>
           {error && <Alert tone="error">{error}</Alert>}
+          {lagging && (
+            <Alert tone="info">
+              Bank data runs through {formatDateShort(latestPosted)}. Card
+              purchases usually post 1–3 business days late, so the days after
+              that may still fill in. Anything already pending shows with a
+              dotted outline.
+            </Alert>
+          )}
 
           {loading && !data ? (
             <div className="cal-grid" aria-hidden="true">
@@ -175,6 +195,7 @@ export default function CalendarView() {
                 const moved = entry?.transferred ?? 0;
                 const projected = entry?.events?.some((e) => !e.actual);
                 const provisional = entry?.events?.some((e) => e.provisional);
+                const pending = entry?.events?.some((e) => e.pending);
                 const hasFlow =
                   entry && (entry.inflow > 0 || entry.outflow > 0 || moved > 0);
                 return (
@@ -186,6 +207,7 @@ export default function CalendarView() {
                       isToday && "is-today",
                       projected && "is-projected",
                       provisional && "is-provisional",
+                      pending && "is-pending",
                       openDay === key && "is-open",
                     ]
                       .filter(Boolean)
@@ -201,6 +223,8 @@ export default function CalendarView() {
                               ? `, ${money(moved)} moved between accounts`
                               : ""
                           }${projected ? ", projected" : ""}${
+                            pending ? ", includes pending" : ""
+                          }${
                             provisional ? ", awaiting confirmation" : ""
                           }`
                         : `${MONTHS[month - 1]} ${day}: no activity`
@@ -246,6 +270,9 @@ export default function CalendarView() {
               accounts (net zero)
             </span>
             <span className="cal-key-item">◇ projected</span>
+            <span className="cal-key-item">
+              dotted outline — pending at the bank, not yet posted
+            </span>
             <span className="cal-key-item">
               dashed outline — large and recent, still waiting on a matching leg
             </span>
@@ -299,7 +326,7 @@ export default function CalendarView() {
                       <span>{e.name}</span>
                     </span>
                     <span className="ledger-meta">
-                      {e.actual ? "Posted" : "Projected"}
+                      {e.pending ? "Pending" : e.actual ? "Posted" : "Projected"}
                       {e.direction === "transfer"
                         ? ` · transfer${
                             e.confidence ? ` (${e.confidence}% match)` : ""

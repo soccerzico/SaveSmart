@@ -7,6 +7,7 @@ import Login from "./pages/Login.jsx";
 import Register from "./pages/Register.jsx";
 import Overview from "./pages/Overview.jsx";
 import Accounts from "./pages/Accounts.jsx";
+import Transactions from "./pages/Transactions.jsx";
 import Cashflow from "./pages/Cashflow.jsx";
 import Goals from "./pages/Goals.jsx";
 import Forecast from "./pages/Forecast.jsx";
@@ -52,6 +53,7 @@ function AuthedApp() {
           <Routes>
             <Route path="/" element={<Overview />} />
             <Route path="/accounts" element={<Accounts />} />
+            <Route path="/transactions" element={<Transactions />} />
             <Route path="/cashflow" element={<Cashflow />} />
             <Route path="/goals" element={<Goals />} />
             <Route path="/forecast" element={<Forecast />} />

@@ -41,7 +41,24 @@ def _current_user_id() -> int:
 
 
 def _today() -> date:
-    return datetime.now(timezone.utc).date()
+    """The user's local date, falling back to UTC.
+
+    The server clock is UTC, which runs a day ahead of the user every US
+    evening - so "today" landed on tomorrow's cell and the history/forecast seam
+    shifted by a day. The client sends its own date as ?today=YYYY-MM-DD.
+
+    Accepted only within a day of UTC: every real timezone sits inside that
+    band, and anything further out is a bad clock rather than a place.
+    """
+    utc = datetime.now(timezone.utc).date()
+    raw = request.args.get("today")
+    if not raw:
+        return utc
+    try:
+        claimed = date.fromisoformat(raw)
+    except ValueError:
+        return utc
+    return claimed if abs((claimed - utc).days) <= 1 else utc
 
 
 def _int_arg(name: str, default: int, low: int, high: int) -> int:
@@ -84,7 +101,7 @@ def balance_series():
 
     today = _today()
     history = reconstruct_daily_balances(user_id, today - timedelta(days=past), today)
-    projection = forecast_daily_balances(user_id, future) if future else []
+    projection = forecast_daily_balances(user_id, future, today=today) if future else []
 
     # Which accounts couldn't be reconstructed, so the UI can say why rather
     # than showing a silently-wrong line.
@@ -117,7 +134,7 @@ def calendar_view():
     today = _today()
     year = _int_arg("year", today.year, 1970, 2200)
     month = _int_arg("month", today.month, 1, 12)
-    return jsonify(calendar_month(_current_user_id(), year, month))
+    return jsonify(calendar_month(_current_user_id(), year, month, today=today))
 
 
 @insights_bp.post("/backfill-snapshots")
