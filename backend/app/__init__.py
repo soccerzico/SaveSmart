@@ -55,7 +55,7 @@ def create_app(config_object: type = Config) -> Flask:
     app.register_blueprint(plaid_bp, url_prefix="/api/plaid")
     app.register_blueprint(assistant_bp, url_prefix="/api/assistant")
     app.register_blueprint(insights_bp, url_prefix="/api/insights")
-    # Dev-only; the route itself 404s when not in debug mode.
+    # Off by default; the route 404s unless SAVESMART_ADMIN=1 and in debug mode.
     app.register_blueprint(admin_bp, url_prefix="/api/admin")
 
     # Translate ApiError raised anywhere in a route into a JSON response.

@@ -60,8 +60,9 @@ def _user_state(user: User) -> dict:
 
 @admin_bp.get("/state")
 def state():
-    # Dev-only. app.debug is True when run via run.py / dev.py; False in prod.
-    if not current_app.debug:
+    # Debug alone isn't enough: run.py / dev.py always set it, so require an
+    # explicit opt-in too.
+    if not (current_app.debug and current_app.config.get("ADMIN_ENABLED")):
         abort(404)
 
     query = User.query.order_by(User.id)
